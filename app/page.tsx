@@ -1,15 +1,6 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import AuthGate from '@/components/AuthGate'
 
-export default async function Home() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (user) {
-    redirect('/submit')
-  }
-
+export default function Home() {
   return (
     <main className="min-h-screen flex flex-col items-center justify-center px-4 py-16 bg-stone-50">
       <div className="w-full max-w-md">
