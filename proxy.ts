@@ -23,7 +23,7 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  // Refresh session — important for keeping users logged in
+  // Refresh session — keeps users logged in
   await supabase.auth.getUser()
 
   return supabaseResponse
