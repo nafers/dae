@@ -1,52 +1,82 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
-import SubmitForm from '@/components/SubmitForm'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
+import AppShell from '@/components/AppShell'
+import SubmitForm from '@/components/SubmitForm'
+import { isFounderEmail } from '@/lib/founders'
+import { createClient } from '@/lib/supabase/server'
 
-export default async function SubmitPage() {
+interface Props {
+  searchParams: Promise<{
+    draft?: string | string[]
+  }>
+}
+
+export default async function SubmitPage({ searchParams }: Props) {
+  const { draft } = await searchParams
+  const initialDraft = Array.isArray(draft) ? draft[0] ?? '' : draft ?? ''
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   if (!user) redirect('/')
 
-  // Check if user already has an unmatched DAE
-  const { data: existingDae } = await supabase
+  const { data: waitingDaes } = await supabase
     .from('daes')
-    .select('id, text, status')
+    .select('id')
     .eq('user_id', user.id)
     .eq('status', 'unmatched')
-    .single()
+
+  const waitingCount = waitingDaes?.length ?? 0
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center px-4 py-16 bg-stone-50">
-      <div className="w-full max-w-md">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-2xl font-bold text-stone-900">Does anyone else…</h1>
+    <AppShell
+      activeTab="submit"
+      userEmail={user.email ?? ''}
+      title="Does anyone else?"
+      actions={
+        isFounderEmail(user.email) ? (
           <Link
-            href="/threads"
-            className="text-sm text-stone-500 hover:text-stone-800 transition-colors"
+            href="/metrics"
+            className="rounded-full border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] shadow-sm hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
           >
-            My matches →
+            Metrics
           </Link>
-        </div>
-
-        {existingDae ? (
-          <div className="space-y-4">
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
-              <p className="text-sm font-medium text-amber-700 mb-1">⏳ Waiting for a match</p>
-              <p className="text-stone-700">
-                "Does anyone else {existingDae.text}"
-              </p>
-            </div>
-            <p className="text-sm text-stone-400 text-center">
-              You'll get an email the moment someone matches with you.
-              Hang tight — it could be minutes or days.
-            </p>
+        ) : undefined
+      }
+    >
+      <div className="space-y-4">
+        <section className="flex flex-col gap-3 rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-4 shadow-[0_14px_36px_rgba(32,26,22,0.05)] lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-[var(--dae-accent-soft)] px-3 py-1 text-sm font-medium text-[var(--dae-accent)]">
+              {waitingCount} waiting
+            </span>
           </div>
-        ) : (
-          <SubmitForm />
-        )}
+
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/review"
+              className="rounded-full border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-warm)] hover:opacity-95"
+            >
+              Review
+            </Link>
+            <Link
+              href="/threads"
+              className="rounded-full border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-cool)] hover:opacity-95"
+            >
+              Chats
+            </Link>
+            <Link
+              href="/browse"
+              className="rounded-full border border-[var(--dae-accent-rose)] bg-[var(--dae-accent-rose-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-rose)] hover:opacity-95"
+            >
+              Browse
+            </Link>
+          </div>
+        </section>
+
+        <SubmitForm initialText={initialDraft} />
       </div>
-    </main>
+    </AppShell>
   )
 }

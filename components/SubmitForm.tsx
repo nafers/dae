@@ -1,38 +1,52 @@
 'use client'
 
-import { useState } from 'react'
+import Link from 'next/link'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 
-export default function SubmitForm() {
-  const [text, setText] = useState('')
+interface Props {
+  initialText?: string
+}
+
+export default function SubmitForm({ initialText = '' }: Props) {
+  const [text, setText] = useState(initialText)
   const [loading, setLoading] = useState(false)
-  const [status, setStatus] = useState<'idle' | 'waiting' | 'matched' | 'error'>('idle')
+  const [status, setStatus] = useState<'idle' | 'waiting' | 'error'>('idle')
   const [error, setError] = useState('')
+  const router = useRouter()
 
   const charCount = text.length
   const maxChars = 280
   const minChars = 10
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  useEffect(() => {
+    setText(initialText)
+    setError('')
+    setStatus('idle')
+  }, [initialText])
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
     if (text.length < minChars) return
 
     setLoading(true)
     setError('')
 
     try {
-      const res = await fetch('/api/embed-and-match', {
+      const response = await fetch('/api/embed-and-match', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text }),
       })
 
-      const data = await res.json()
+      const data = await response.json()
 
-      if (!res.ok) {
-        setError(data.error || 'Something went wrong. Try again.')
+      if (!response.ok) {
+        setError(data.error || 'Something went wrong.')
         setStatus('error')
       } else if (data.status === 'matched') {
-        setStatus('matched')
+        router.push(`/threads/${data.matchId}`)
+        return
       } else {
         setStatus('waiting')
       }
@@ -44,74 +58,98 @@ export default function SubmitForm() {
     }
   }
 
-  if (status === 'matched') {
-    return (
-      <div className="text-center py-8 space-y-4">
-        <div className="text-5xl">🎉</div>
-        <h2 className="text-xl font-semibold text-stone-800">Someone else does this too!</h2>
-        <p className="text-stone-500">Check your email — we've connected you with your match.</p>
-        <a
-          href="/threads"
-          className="inline-block mt-2 py-3 px-6 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-700 transition-colors"
-        >
-          Go to my matches →
-        </a>
-      </div>
-    )
-  }
-
   if (status === 'waiting') {
     return (
-      <div className="text-center py-8 space-y-4">
-        <div className="text-5xl animate-pulse">🔍</div>
-        <h2 className="text-xl font-semibold text-stone-800">Looking for your match…</h2>
-        <p className="text-stone-500">
-          Your DAE is in the pool. We'll email you the moment someone submits something similar.
-          Could be minutes — could be a few days.
-        </p>
-        <p className="text-xs text-stone-400">
-          "Does anyone else {text}"
-        </p>
+      <div className="space-y-4 rounded-[28px] border border-[var(--dae-accent-warm)]/30 bg-[var(--dae-accent-warm-soft)] p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--dae-accent-warm)]">
+              Waiting
+            </p>
+            <h2 className="mt-1 text-xl font-semibold text-[var(--dae-ink)]">Still looking</h2>
+          </div>
+          <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[var(--dae-muted)]">
+            {charCount}/{maxChars}
+          </span>
+        </div>
+
+        <div className="rounded-2xl bg-white/80 px-4 py-3">
+          <p className="text-sm leading-6 text-[var(--dae-ink)]">{text}</p>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              setText('')
+              setError('')
+              setStatus('idle')
+            }}
+            className="rounded-full border border-[var(--dae-accent)] bg-[var(--dae-accent-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent)] hover:opacity-95"
+          >
+            New
+          </button>
+          <Link
+            href="/review"
+            className="rounded-full border border-[var(--dae-accent-warm)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-accent-warm)] hover:bg-[var(--dae-accent-warm-soft)]"
+          >
+            Review
+          </Link>
+          <Link
+            href="/browse"
+            className="rounded-full border border-[var(--dae-accent-rose)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-accent-rose)] hover:bg-[var(--dae-accent-rose-soft)]"
+          >
+            Browse
+          </Link>
+          <Link
+            href="/threads"
+            className="rounded-full border border-[var(--dae-accent-cool)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-accent-cool)] hover:bg-[var(--dae-accent-cool-soft)]"
+          >
+            Chats
+          </Link>
+        </div>
       </div>
     )
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="bg-white rounded-2xl border border-stone-200 p-5">
-        <p className="text-stone-400 text-sm font-medium mb-2">Does anyone else…</p>
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value.slice(0, maxChars))}
-          placeholder="…always count the stairs when walking up them?"
-          rows={4}
-          className="w-full text-stone-900 placeholder-stone-300 text-base resize-none focus:outline-none leading-relaxed"
-        />
-        <div className="flex justify-between items-center mt-2">
-          <span className={`text-xs ${charCount > maxChars * 0.9 ? 'text-amber-500' : 'text-stone-300'}`}>
+      <div className="rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-5 shadow-[0_14px_36px_rgba(32,26,22,0.05)]">
+        <div className="flex items-center justify-between gap-3">
+          <label htmlFor="dae-text" className="text-sm font-semibold text-[var(--dae-ink)]">
+            Does anyone else?
+          </label>
+          <span className={`text-xs ${charCount > maxChars * 0.9 ? 'text-[var(--dae-accent-warm)]' : 'text-[var(--dae-muted)]'}`}>
             {charCount}/{maxChars}
           </span>
-          {charCount < minChars && charCount > 0 && (
-            <span className="text-xs text-stone-400">{minChars - charCount} more characters needed</span>
-          )}
+        </div>
+
+        <textarea
+          id="dae-text"
+          value={text}
+          onChange={(event) => setText(event.target.value.slice(0, maxChars))}
+          placeholder="love the way Scrubs still holds up"
+          rows={5}
+          className="mt-4 w-full resize-none bg-transparent text-lg leading-8 text-[var(--dae-ink)] placeholder:text-stone-400 focus:outline-none"
+        />
+
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <p className="text-xs text-[var(--dae-muted)]">10-280 chars.</p>
+          {charCount < minChars && charCount > 0 ? (
+            <span className="text-xs text-[var(--dae-muted)]">{minChars - charCount} more</span>
+          ) : null}
         </div>
       </div>
 
-      {error && (
-        <p className="text-red-500 text-sm px-1">{error}</p>
-      )}
+      {error ? <p className="px-1 text-sm text-red-500">{error}</p> : null}
 
       <button
         type="submit"
         disabled={loading || charCount < minChars}
-        className="w-full py-3 px-6 bg-stone-900 text-white rounded-xl font-medium text-base hover:bg-stone-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        className="w-full rounded-2xl bg-[var(--dae-accent)] px-6 py-3 text-base font-medium text-white transition-all hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-40"
       >
-        {loading ? 'Finding your match…' : 'Submit DAE →'}
+        {loading ? 'Matching...' : 'Post'}
       </button>
-
-      <p className="text-center text-xs text-stone-400">
-        Anonymous. One active DAE at a time.
-      </p>
     </form>
   )
 }
