@@ -1,81 +1,107 @@
-import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
+import AppShell from '@/components/AppShell'
+import ThreadOverviewCard from '@/components/ThreadOverviewCard'
+import { isFounderEmail } from '@/lib/founders'
+import { createClient } from '@/lib/supabase/server'
+import { fetchThreadDirectory } from '@/lib/thread-directory'
 
-export default async function ThreadsPage() {
+interface Props {
+  searchParams: Promise<{
+    hidden?: string | string[]
+  }>
+}
+
+export default async function ThreadsPage({ searchParams }: Props) {
+  const { hidden } = await searchParams
+  const showHidden = Array.isArray(hidden) ? hidden[0] === '1' : hidden === '1'
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   if (!user) redirect('/')
 
-  // Get all threads this user is part of
-  const { data: participants } = await supabase
-    .from('thread_participants')
-    .select(`
-      match_id,
-      handle,
-      dae_id,
-      daes ( text ),
-      matches ( created_at )
-    `)
-    .eq('user_id', user.id)
-    .order('created_at', { referencedTable: 'matches', ascending: false })
+  const threadCards = await fetchThreadDirectory({
+    currentUserId: user.id,
+    scope: 'joined',
+    limit: 24,
+  })
+  const hiddenCount = threadCards.filter((thread) => thread.isHidden).length
+  const visibleThreadCards = threadCards.filter((thread) => (showHidden ? thread.isHidden : !thread.isHidden))
 
   return (
-    <main className="min-h-screen bg-stone-50 px-4 py-12">
-      <div className="w-full max-w-md mx-auto">
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-bold text-stone-900">My Matches</h1>
-          <Link
-            href="/submit"
-            className="text-sm text-stone-500 hover:text-stone-800 transition-colors"
-          >
-            ← Submit a DAE
-          </Link>
-        </div>
-
-        {!participants || participants.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="text-4xl mb-4">🔍</div>
-            <h2 className="text-lg font-medium text-stone-700 mb-2">No matches yet</h2>
-            <p className="text-stone-400 text-sm mb-6">
-              Submit a DAE and we'll email you when someone matches.
-            </p>
+    <AppShell
+      activeTab="threads"
+      userEmail={user.email ?? ''}
+      eyebrow="Chats"
+      title="Your rooms"
+      description={
+        visibleThreadCards.length > 0
+          ? `${visibleThreadCards.length} ${showHidden ? 'hidden' : 'active'} room${visibleThreadCards.length === 1 ? '' : 's'}.`
+          : showHidden
+            ? 'No hidden rooms.'
+            : 'No rooms yet.'
+      }
+      actions={
+        <>
+          {hiddenCount > 0 ? (
+            <Link
+              href={showHidden ? '/threads' : '/threads?hidden=1'}
+              className="rounded-full border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] shadow-sm hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
+            >
+              {showHidden ? 'Active rooms' : `Hidden ${hiddenCount}`}
+            </Link>
+          ) : null}
+          {isFounderEmail(user.email) ? (
+            <Link
+              href="/metrics"
+              className="rounded-full border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] shadow-sm hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
+            >
+              Metrics
+            </Link>
+          ) : null}
+        </>
+      }
+    >
+      {visibleThreadCards.length === 0 ? (
+        <div className="rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-8 text-center shadow-[0_14px_36px_rgba(32,26,22,0.05)]">
+          <h2 className="text-2xl font-semibold text-[var(--dae-ink)]">
+            {showHidden ? 'No hidden chats.' : 'No chats yet.'}
+          </h2>
+          <div className="mt-5 flex flex-wrap justify-center gap-2">
             <Link
               href="/submit"
-              className="inline-block py-3 px-6 bg-stone-900 text-white rounded-xl font-medium hover:bg-stone-700 transition-colors"
+              className="rounded-full border border-[var(--dae-accent)] bg-[var(--dae-accent-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent)] hover:opacity-95"
             >
-              Submit a DAE →
+              Submit
+            </Link>
+            <Link
+              href="/browse"
+              className="rounded-full border border-[var(--dae-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-ink)] hover:border-[var(--dae-muted)]"
+            >
+              Browse
             </Link>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {participants.map((p) => {
-              const daeText = (p.daes as any)?.text ?? ''
-              const createdAt = (p.matches as any)?.created_at
-              const date = createdAt ? new Date(createdAt).toLocaleDateString('en-US', {
-                month: 'short', day: 'numeric'
-              }) : ''
-
-              return (
+        </div>
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-2">
+          {visibleThreadCards.map((thread) => (
+            <ThreadOverviewCard
+              key={thread.matchId}
+              thread={thread}
+              primaryAction={
                 <Link
-                  key={p.match_id}
-                  href={`/threads/${p.match_id}`}
-                  className="block bg-white rounded-2xl border border-stone-200 p-5 hover:border-stone-400 transition-colors"
+                  href={`/threads/${thread.matchId}`}
+                  className="rounded-full border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-cool)] hover:opacity-95"
                 >
-                  <div className="flex justify-between items-start mb-2">
-                    <span className="text-xs font-medium text-stone-400">You are {p.handle}</span>
-                    <span className="text-xs text-stone-300">{date}</span>
-                  </div>
-                  <p className="text-stone-700 text-sm leading-relaxed line-clamp-2">
-                    "Does anyone else {daeText}"
-                  </p>
+                  Open
                 </Link>
-              )
-            })}
-          </div>
-        )}
-      </div>
-    </main>
+              }
+            />
+          ))}
+        </div>
+      )}
+    </AppShell>
   )
 }

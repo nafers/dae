@@ -1,9 +1,50 @@
 @import "tailwindcss";
 
+:root {
+  --dae-bg: #f6f0e7;
+  --dae-surface: #fffaf4;
+  --dae-surface-strong: #ffffff;
+  --dae-line: #e8ddd0;
+  --dae-ink: #201a16;
+  --dae-muted: #73665c;
+  --dae-accent: #146c67;
+  --dae-accent-soft: #d7eeeb;
+  --dae-accent-cool: #2563eb;
+  --dae-accent-cool-soft: #dbeafe;
+  --dae-accent-warm: #e88d2b;
+  --dae-accent-warm-soft: #fff0d8;
+  --dae-accent-rose: #c85863;
+  --dae-accent-rose-soft: #ffe4e8;
+}
+
 * {
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   height: 100%;
+}
+
+html {
+  background: var(--dae-bg);
+}
+
+body {
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(20, 108, 103, 0.12), transparent 24%),
+    radial-gradient(circle at top right, rgba(232, 141, 43, 0.14), transparent 24%),
+    linear-gradient(180deg, #faf4ec, var(--dae-bg));
+  color: var(--dae-ink);
+  text-rendering: optimizeLegibility;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: rgba(20, 108, 103, 0.18);
 }

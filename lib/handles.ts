@@ -31,8 +31,36 @@ const nouns = [
   'Cove', 'Dale', 'Dell', 'Dew', 'Dove', 'Dusk', 'Fawn', 'Flint',
 ]
 
-export function generateHandle(): string {
+const HANDLE_POOL_SIZE = adjectives.length * nouns.length
+
+function randomHandle() {
   const adj = adjectives[Math.floor(Math.random() * adjectives.length)]
   const noun = nouns[Math.floor(Math.random() * nouns.length)]
   return `${adj}${noun}`
+}
+
+export function generateHandle(excludedHandles: Set<string> = new Set()): string {
+  if (excludedHandles.size >= HANDLE_POOL_SIZE) {
+    return `${randomHandle()}${Math.floor(Math.random() * 90) + 10}`
+  }
+
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const handle = randomHandle()
+
+    if (!excludedHandles.has(handle)) {
+      return handle
+    }
+  }
+
+  for (const adjective of adjectives) {
+    for (const noun of nouns) {
+      const handle = `${adjective}${noun}`
+
+      if (!excludedHandles.has(handle)) {
+        return handle
+      }
+    }
+  }
+
+  return `${randomHandle()}${Date.now().toString(36).slice(-4)}`
 }

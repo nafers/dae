@@ -1,15 +1,49 @@
 import { redirect, notFound } from 'next/navigation'
+import Link from 'next/link'
+import AppShell from '@/components/AppShell'
 import { createClient, createAdminClient } from '@/lib/supabase/server'
 import ChatThread from '@/components/ChatThread'
+import { trackAnalyticsEvent } from '@/lib/analytics'
+import { isFounderEmail } from '@/lib/founders'
+import { fetchThreadUserStates, getThreadUserState } from '@/lib/thread-state'
 
 interface Props {
   params: Promise<{ matchId: string }>
 }
 
+interface DaeRelation {
+  text: string
+}
+
+interface ThreadParticipant {
+  user_id: string
+  handle: string
+  dae_id: string
+  daes: DaeRelation | DaeRelation[] | null
+}
+
+interface ChatParticipant {
+  userId: string
+  handle: string
+  dae: string
+}
+
+type MatchFeedback = 'good' | 'bad' | null
+
+function getDaeText(daeRelation: DaeRelation | DaeRelation[] | null) {
+  if (Array.isArray(daeRelation)) {
+    return daeRelation[0]?.text ?? ''
+  }
+
+  return daeRelation?.text ?? ''
+}
+
 export default async function ThreadPage({ params }: Props) {
   const { matchId } = await params
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   if (!user) redirect(`/?next=/threads/${matchId}`)
 
@@ -26,17 +60,29 @@ export default async function ThreadPage({ params }: Props) {
     `)
     .eq('match_id', matchId)
 
-  if (error || !participants || participants.length !== 2) {
+  if (error || !participants || participants.length === 0) {
     notFound()
   }
 
-  // Verify the current user is one of the participants
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const myParticipant = (participants as any[]).find((p) => p.user_id === user.id)
+  const typedParticipants = participants as ThreadParticipant[]
+  const myParticipant = typedParticipants.find((participant) => participant.user_id === user.id)
   if (!myParticipant) notFound()
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const theirParticipant = (participants as any[]).find((p) => p.user_id !== user.id)!
+  const orderedParticipants: ChatParticipant[] = [
+    {
+      userId: myParticipant.user_id,
+      handle: myParticipant.handle,
+      dae: getDaeText(myParticipant.daes),
+    },
+    ...typedParticipants
+      .filter((participant) => participant.user_id !== user.id)
+      .sort((a, b) => a.handle.localeCompare(b.handle))
+      .map((participant) => ({
+        userId: participant.user_id,
+        handle: participant.handle,
+        dae: getDaeText(participant.daes),
+      })),
+  ]
 
   // Get initial messages
   const { data: initialMessages } = await admin
@@ -46,15 +92,62 @@ export default async function ThreadPage({ params }: Props) {
     .order('created_at', { ascending: true })
     .limit(50)
 
+  const { data: feedbackEvent } = await admin
+    .from('analytics_events')
+    .select('metadata')
+    .eq('event_name', 'match_feedback_submitted')
+    .eq('user_id', user.id)
+    .eq('match_id', matchId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const threadStateMap = await fetchThreadUserStates({
+    userIds: [user.id],
+    matchIds: [matchId],
+  })
+  const initialThreadState = getThreadUserState(threadStateMap, user.id, matchId)
+
+  const initialFeedback = ((feedbackEvent?.metadata as { verdict?: MatchFeedback } | null)?.verdict ??
+    null) as MatchFeedback
+
+  await trackAnalyticsEvent({
+    eventName: 'thread_opened',
+    userId: user.id,
+    matchId,
+    daeId: myParticipant.dae_id,
+    metadata: {
+      initialMessageCount: initialMessages?.length ?? 0,
+      participantCount: orderedParticipants.length,
+    },
+  })
+
   return (
-    <ChatThread
-      matchId={matchId}
-      myHandle={myParticipant.handle}
-      myDae={(myParticipant.daes as any)?.text ?? ''}
-      theirHandle={theirParticipant.handle}
-      theirDae={(theirParticipant.daes as any)?.text ?? ''}
-      myUserId={user.id}
-      initialMessages={initialMessages ?? []}
-    />
+    <AppShell
+      activeTab="threads"
+      userEmail={user.email ?? ''}
+      eyebrow="Chat"
+      title="Room"
+      description={`#${matchId.slice(0, 8)}`}
+      compact
+      actions={
+        isFounderEmail(user.email) ? (
+          <Link
+            href="/metrics"
+            className="rounded-full border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] shadow-sm hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
+          >
+            Metrics
+          </Link>
+        ) : undefined
+      }
+    >
+      <ChatThread
+        matchId={matchId}
+        initialParticipants={orderedParticipants}
+        myUserId={user.id}
+        initialFeedback={initialFeedback}
+        initialMessages={initialMessages ?? []}
+        initialThreadState={initialThreadState}
+      />
+    </AppShell>
   )
 }

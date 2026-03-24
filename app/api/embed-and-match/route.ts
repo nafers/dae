@@ -1,14 +1,19 @@
 import { NextResponse } from 'next/server'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
 import OpenAI from 'openai'
+import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { generateHandle } from '@/lib/handles'
+import { trackAnalyticsEvent } from '@/lib/analytics'
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+const MATCH_THRESHOLD = 0.8
 
 export async function POST(request: Request) {
   try {
     const supabase = await createClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
@@ -22,22 +27,9 @@ export async function POST(request: Request) {
 
     const trimmed = text.trim()
     if (trimmed.length < 10 || trimmed.length > 280) {
-      return NextResponse.json({ error: 'Text must be 10–280 characters' }, { status: 400 })
+      return NextResponse.json({ error: 'Text must be 10-280 characters' }, { status: 400 })
     }
 
-    // Check if user already has an unmatched DAE
-    const { data: existing } = await supabase
-      .from('daes')
-      .select('id')
-      .eq('user_id', user.id)
-      .eq('status', 'unmatched')
-      .single()
-
-    if (existing) {
-      return NextResponse.json({ error: 'You already have a pending DAE' }, { status: 400 })
-    }
-
-    // Generate embedding
     const embeddingResponse = await openai.embeddings.create({
       model: 'text-embedding-3-small',
       input: trimmed,
@@ -46,7 +38,6 @@ export async function POST(request: Request) {
 
     const admin = createAdminClient()
 
-    // Store the new DAE
     const { data: newDae, error: insertError } = await admin
       .from('daes')
       .insert({
@@ -63,31 +54,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to save DAE' }, { status: 500 })
     }
 
-    // Search for a matching DAE using pgvector cosine similarity
     const { data: matches, error: matchError } = await admin.rpc('find_match', {
       query_embedding: JSON.stringify(embedding),
       exclude_user_id: user.id,
-      match_threshold: 0.82,
+      match_threshold: MATCH_THRESHOLD,
     })
 
     if (matchError) {
       console.error('Match error:', matchError)
-      // DAE is saved, just no match found yet
       return NextResponse.json({ status: 'waiting' })
     }
 
     if (!matches || matches.length === 0) {
+      await trackAnalyticsEvent({
+        eventName: 'dae_waiting',
+        userId: user.id,
+        daeId: newDae.id,
+      })
+
       return NextResponse.json({ status: 'waiting' })
     }
 
     const bestMatch = matches[0]
 
-    // Create the match and thread participants in a transaction via admin
-    const handleA = generateHandle()
-    let handleB = generateHandle()
-    while (handleB === handleA) handleB = generateHandle()
-
-    // Get matched user info
     const { data: matchedDae } = await admin
       .from('daes')
       .select('user_id')
@@ -98,7 +87,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ status: 'waiting' })
     }
 
-    // Create match record
+    const { data: priorHandleRows } = await admin
+      .from('thread_participants')
+      .select('user_id, handle')
+      .in('user_id', [user.id, matchedDae.user_id])
+
+    const usedHandlesByUser = new Map<string, Set<string>>()
+
+    for (const handleRow of priorHandleRows ?? []) {
+      const existingHandles = usedHandlesByUser.get(handleRow.user_id) ?? new Set<string>()
+      existingHandles.add(handleRow.handle)
+      usedHandlesByUser.set(handleRow.user_id, existingHandles)
+    }
+
+    const reservedHandles = new Set<string>()
+    const handleA = generateHandle(
+      new Set([...(usedHandlesByUser.get(user.id) ?? []), ...reservedHandles])
+    )
+    reservedHandles.add(handleA)
+    const handleB = generateHandle(
+      new Set([...(usedHandlesByUser.get(matchedDae.user_id) ?? []), ...reservedHandles])
+    )
+
     const { data: matchRecord, error: matchInsertError } = await admin
       .from('matches')
       .insert({
@@ -114,24 +124,44 @@ export async function POST(request: Request) {
       return NextResponse.json({ status: 'waiting' })
     }
 
-    // Update both DAEs to matched
+    const { error: participantInsertError } = await admin.from('thread_participants').insert([
+      { match_id: matchRecord.id, user_id: user.id, dae_id: newDae.id, handle: handleA },
+      {
+        match_id: matchRecord.id,
+        user_id: matchedDae.user_id,
+        dae_id: bestMatch.id,
+        handle: handleB,
+      },
+    ])
+
+    if (participantInsertError) {
+      console.error('Thread participant insert error:', participantInsertError)
+      return NextResponse.json({ status: 'waiting' })
+    }
+
+    const matchId = matchRecord.id
+
     await admin
       .from('daes')
       .update({ status: 'matched' })
       .in('id', [newDae.id, bestMatch.id])
 
-    // Create thread participants
-    await admin.from('thread_participants').insert([
-      { match_id: matchRecord.id, user_id: user.id, dae_id: newDae.id, handle: handleA },
-      { match_id: matchRecord.id, user_id: matchedDae.user_id, dae_id: bestMatch.id, handle: handleB },
-    ])
+    await trackAnalyticsEvent({
+      eventName: 'dae_matched',
+      userId: user.id,
+      matchId,
+      daeId: newDae.id,
+      metadata: {
+        threadStrategy: 'per_matched_dae_pair',
+        similarity: bestMatch.similarity,
+      },
+    })
 
-    // Send notification emails
     await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/notify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        matchId: matchRecord.id,
+        matchId,
         userAId: user.id,
         userBId: matchedDae.user_id,
         handleA,
@@ -141,7 +171,7 @@ export async function POST(request: Request) {
       }),
     })
 
-    return NextResponse.json({ status: 'matched', matchId: matchRecord.id })
+    return NextResponse.json({ status: 'matched', matchId })
   } catch (error) {
     console.error('Unexpected error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
