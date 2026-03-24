@@ -3,7 +3,8 @@ import { redirect } from 'next/navigation'
 import AppShell from '@/components/AppShell'
 import SubmitForm from '@/components/SubmitForm'
 import { isFounderEmail } from '@/lib/founders'
-import { createClient } from '@/lib/supabase/server'
+import { getRequestUser } from '@/lib/request-user'
+import { createAdminClient } from '@/lib/supabase/server'
 
 interface Props {
   searchParams: Promise<{
@@ -14,20 +15,16 @@ interface Props {
 export default async function SubmitPage({ searchParams }: Props) {
   const { draft } = await searchParams
   const initialDraft = Array.isArray(draft) ? draft[0] ?? '' : draft ?? ''
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getRequestUser()
 
   if (!user) redirect('/')
 
-  const { data: waitingDaes } = await supabase
+  const admin = createAdminClient()
+  const { count: waitingCount } = await admin
     .from('daes')
-    .select('id')
+    .select('*', { count: 'exact', head: true })
     .eq('user_id', user.id)
     .eq('status', 'unmatched')
-
-  const waitingCount = waitingDaes?.length ?? 0
 
   return (
     <AppShell
@@ -49,7 +46,7 @@ export default async function SubmitPage({ searchParams }: Props) {
         <section className="flex flex-col gap-3 rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-4 shadow-[0_14px_36px_rgba(32,26,22,0.05)] lg:flex-row lg:items-center lg:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full bg-[var(--dae-accent-soft)] px-3 py-1 text-sm font-medium text-[var(--dae-accent)]">
-              {waitingCount} waiting
+              {waitingCount ?? 0} waiting
             </span>
           </div>
 

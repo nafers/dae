@@ -3,32 +3,24 @@ import { redirect } from 'next/navigation'
 import AppShell from '@/components/AppShell'
 import BrowseTopics from '@/components/BrowseTopics'
 import { isFounderEmail } from '@/lib/founders'
-import { createClient } from '@/lib/supabase/server'
+import { getRequestUser } from '@/lib/request-user'
+import { createAdminClient } from '@/lib/supabase/server'
 import { fetchCachedBrowseTopics } from '@/lib/browse-directory'
 
-interface WaitingDaeOption {
-  id: string
-}
-
 export default async function BrowsePage() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getRequestUser()
 
   if (!user) redirect('/')
 
-  const [{ data: waitingDaes }, browseTopics] = await Promise.all([
-    supabase
+  const admin = createAdminClient()
+  const [{ count: waitingCount }, browseTopics] = await Promise.all([
+    admin
       .from('daes')
-      .select('id')
+      .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id)
-      .eq('status', 'unmatched')
-      .order('created_at', { ascending: false }),
+      .eq('status', 'unmatched'),
     fetchCachedBrowseTopics(),
   ])
-
-  const typedWaitingDaes = (waitingDaes ?? []) as WaitingDaeOption[]
 
   return (
     <AppShell
@@ -36,9 +28,7 @@ export default async function BrowsePage() {
       userEmail={user.email ?? ''}
       eyebrow="Browse"
       title="Browse ideas"
-      description={
-        typedWaitingDaes.length > 0 ? 'Search ideas. Review to attach yours.' : 'Search the pool.'
-      }
+      description={(waitingCount ?? 0) > 0 ? 'Search ideas. Review to attach yours.' : 'Search the pool.'}
       actions={
         isFounderEmail(user.email) ? (
           <Link
@@ -55,7 +45,7 @@ export default async function BrowsePage() {
           <h2 className="text-2xl font-semibold text-[var(--dae-ink)]">Nothing to browse yet.</h2>
         </div>
       ) : (
-        <BrowseTopics topics={browseTopics} waitingCount={typedWaitingDaes.length} />
+        <BrowseTopics topics={browseTopics} waitingCount={waitingCount ?? 0} />
       )}
     </AppShell>
   )

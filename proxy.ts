@@ -1,8 +1,14 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import {
+  PROXY_AUTHENTICATED_HEADER,
+  PROXY_USER_EMAIL_HEADER,
+  PROXY_USER_ID_HEADER,
+} from '@/lib/auth-headers'
 
 export async function proxy(request: NextRequest) {
   const canonicalUrl = process.env.NEXT_PUBLIC_APP_URL
+  const requestHeaders = new Headers(request.headers)
 
   if (canonicalUrl) {
     const canonical = new URL(canonicalUrl)
@@ -42,9 +48,31 @@ export async function proxy(request: NextRequest) {
   )
 
   // Refresh the session so server-rendered pages see the latest auth cookies.
-  await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  return supabaseResponse
+  if (user) {
+    requestHeaders.set(PROXY_AUTHENTICATED_HEADER, '1')
+    requestHeaders.set(PROXY_USER_ID_HEADER, user.id)
+    requestHeaders.set(PROXY_USER_EMAIL_HEADER, user.email ?? '')
+  } else {
+    requestHeaders.set(PROXY_AUTHENTICATED_HEADER, '0')
+    requestHeaders.delete(PROXY_USER_ID_HEADER)
+    requestHeaders.delete(PROXY_USER_EMAIL_HEADER)
+  }
+
+  const response = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  })
+
+  for (const cookie of supabaseResponse.cookies.getAll()) {
+    response.cookies.set(cookie)
+  }
+
+  return response
 }
 
 export const config = {

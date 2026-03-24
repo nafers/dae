@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { getRequestUser } from '@/lib/request-user'
+import { createAdminClient } from '@/lib/supabase/server'
 import { isFounderEmail } from '@/lib/founders'
 
 interface AnalyticsEventRow {
@@ -68,11 +69,8 @@ function MetricCard({
 }
 
 export default async function MetricsPage() {
-  const supabase = await createClient()
+  const user = await getRequestUser()
   const admin = createAdminClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
 
   if (!user) redirect('/?next=/metrics')
   if (!isFounderEmail(user.email)) redirect('/submit')

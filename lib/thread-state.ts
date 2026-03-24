@@ -66,7 +66,7 @@ export async function fetchThreadUserStates({
   }
 
   const admin = createAdminClient()
-  const estimatedLimit = Math.max(200, uniqueUserIds.length * uniqueMatchIds.length * 14)
+  const estimatedLimit = Math.min(240, Math.max(24, uniqueUserIds.length * uniqueMatchIds.length * 8))
   const { data } = await admin
     .from('analytics_events')
     .select('event_name, user_id, match_id, metadata, created_at')

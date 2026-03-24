@@ -1,4 +1,5 @@
 import AuthGate from '@/components/AuthGate'
+import { getRequestUser } from '@/lib/request-user'
 import { redirect } from 'next/navigation'
 
 interface Props {
@@ -14,6 +15,7 @@ export default async function Home({ searchParams }: Props) {
   const authCode = Array.isArray(code) ? code[0] : code
   const authError = Array.isArray(error) ? error[0] : error
   const nextPath = Array.isArray(next) ? next[0] : next
+  const safeNext = nextPath?.startsWith('/') ? nextPath : '/submit'
 
   if (authCode) {
     const callbackParams = new URLSearchParams({ code: authCode })
@@ -21,6 +23,11 @@ export default async function Home({ searchParams }: Props) {
       callbackParams.set('next', nextPath)
     }
     redirect(`/auth/callback?${callbackParams.toString()}`)
+  }
+
+  const user = await getRequestUser()
+  if (user) {
+    redirect(safeNext)
   }
 
   return (
@@ -39,7 +46,7 @@ export default async function Home({ searchParams }: Props) {
         </div>
 
         <div className="rounded-[32px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-6 shadow-[0_18px_40px_rgba(32,26,22,0.06)]">
-          <AuthGate nextPath={nextPath} authError={authError} />
+          <AuthGate nextPath={safeNext} authError={authError} />
         </div>
       </div>
     </main>

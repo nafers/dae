@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { canUseTestSwitcher, getTestAccountEmails } from '@/lib/test-accounts'
+import { getRequestUser } from '@/lib/request-user'
+import { createAdminClient } from '@/lib/supabase/server'
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
@@ -8,10 +9,7 @@ export async function GET(request: Request) {
   const nextPath = requestUrl.searchParams.get('next')
   const safeNext = nextPath?.startsWith('/') ? nextPath : '/submit'
 
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getRequestUser()
 
   if (!user || !canUseTestSwitcher(user.email)) {
     return NextResponse.redirect(new URL('/', requestUrl.origin))

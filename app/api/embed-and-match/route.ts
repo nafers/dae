@@ -1,21 +1,17 @@
 import { NextResponse } from 'next/server'
 import OpenAI from 'openai'
-import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { generateHandle } from '@/lib/handles'
 import { trackAnalyticsEvent } from '@/lib/analytics'
+import { getRequestUser } from '@/lib/request-user'
+import { createAdminClient } from '@/lib/supabase/server'
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 const MATCH_THRESHOLD = 0.8
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
+    const user = await getRequestUser()
+    if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 

@@ -1,15 +1,11 @@
 import { NextResponse } from 'next/server'
-import { createAdminClient, createClient } from '@/lib/supabase/server'
 import { trackAnalyticsEvent } from '@/lib/analytics'
+import { getRequestUser } from '@/lib/request-user'
+import { createAdminClient } from '@/lib/supabase/server'
 
 async function getAuthedParticipant(matchId: string) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-
-  if (authError || !user) {
+  const user = await getRequestUser()
+  if (!user) {
     return { error: NextResponse.json({ error: 'Not authenticated' }, { status: 401 }) }
   }
 

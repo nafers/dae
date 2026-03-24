@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { trackAnalyticsEvents } from '@/lib/analytics'
-import { createAdminClient, createClient } from '@/lib/supabase/server'
+import { getRequestUser } from '@/lib/request-user'
+import { createAdminClient } from '@/lib/supabase/server'
 
 export async function POST(request: Request) {
   try {
@@ -14,13 +15,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid leave mode' }, { status: 400 })
     }
 
-    const supabase = await createClient()
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser()
-
-    if (authError || !user) {
+    const user = await getRequestUser()
+    if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 

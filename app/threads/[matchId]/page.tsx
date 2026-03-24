@@ -1,10 +1,12 @@
+import { after } from 'next/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import AppShell from '@/components/AppShell'
-import { createClient, createAdminClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import ChatThread from '@/components/ChatThread'
 import { trackAnalyticsEvent } from '@/lib/analytics'
 import { isFounderEmail } from '@/lib/founders'
+import { getRequestUser } from '@/lib/request-user'
 import { fetchThreadUserStates, getThreadUserState } from '@/lib/thread-state'
 
 interface Props {
@@ -40,10 +42,7 @@ function getDaeText(daeRelation: DaeRelation | DaeRelation[] | null) {
 
 export default async function ThreadPage({ params }: Props) {
   const { matchId } = await params
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getRequestUser()
 
   if (!user) redirect(`/?next=/threads/${matchId}`)
 
@@ -84,41 +83,43 @@ export default async function ThreadPage({ params }: Props) {
       })),
   ]
 
-  // Get initial messages
-  const { data: initialMessages } = await admin
-    .from('messages')
-    .select('id, sender_id, content, created_at')
-    .eq('match_id', matchId)
-    .order('created_at', { ascending: true })
-    .limit(50)
-
-  const { data: feedbackEvent } = await admin
-    .from('analytics_events')
-    .select('metadata')
-    .eq('event_name', 'match_feedback_submitted')
-    .eq('user_id', user.id)
-    .eq('match_id', matchId)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  const threadStateMap = await fetchThreadUserStates({
-    userIds: [user.id],
-    matchIds: [matchId],
-  })
+  const [{ data: initialMessages }, { data: feedbackEvent }, threadStateMap] = await Promise.all([
+    admin
+      .from('messages')
+      .select('id, sender_id, content, created_at')
+      .eq('match_id', matchId)
+      .order('created_at', { ascending: true })
+      .limit(50),
+    admin
+      .from('analytics_events')
+      .select('metadata')
+      .eq('event_name', 'match_feedback_submitted')
+      .eq('user_id', user.id)
+      .eq('match_id', matchId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    fetchThreadUserStates({
+      userIds: [user.id],
+      matchIds: [matchId],
+    }),
+  ])
   const initialThreadState = getThreadUserState(threadStateMap, user.id, matchId)
 
   const initialFeedback = ((feedbackEvent?.metadata as { verdict?: MatchFeedback } | null)?.verdict ??
     null) as MatchFeedback
 
-  await trackAnalyticsEvent({
-    eventName: 'thread_opened',
-    userId: user.id,
-    matchId,
-    daeId: myParticipant.dae_id,
-    metadata: {
-      initialMessageCount: initialMessages?.length ?? 0,
-      participantCount: orderedParticipants.length,
-    },
+  after(async () => {
+    await trackAnalyticsEvent({
+      eventName: 'thread_opened',
+      userId: user.id,
+      matchId,
+      daeId: myParticipant.dae_id,
+      metadata: {
+        initialMessageCount: initialMessages?.length ?? 0,
+        participantCount: orderedParticipants.length,
+      },
+    })
   })
 
   return (
