@@ -7,6 +7,7 @@ interface Props {
   primaryAction?: React.ReactNode
   secondaryAction?: React.ReactNode
   showLatestActivity?: boolean
+  compact?: boolean
 }
 
 function formatDate(timestamp: string) {
@@ -23,22 +24,30 @@ export default function ThreadOverviewCard({
   primaryAction,
   secondaryAction,
   showLatestActivity = true,
+  compact = false,
 }: Props) {
   const daeTexts = [...new Set(thread.participants.map((participant) => participant.daeText).filter(Boolean))]
   const headline = chooseRepresentativeText(daeTexts)
   const topicLabel = getTopicLabel(daeTexts)
   const supportingDaes = daeTexts.filter((text) => text !== headline).slice(0, 2)
+  const visibleParticipants = compact ? thread.participants.slice(0, 3) : thread.participants
+  const hiddenParticipantCount = Math.max(thread.participants.length - visibleParticipants.length, 0)
+  const cardPadding = compact ? 'p-3.5' : 'p-4'
+  const headlineClass = compact
+    ? 'mt-1.5 line-clamp-2 text-base font-semibold leading-6 text-[var(--dae-ink)]'
+    : 'mt-2 line-clamp-2 text-lg font-semibold leading-7 text-[var(--dae-ink)]'
+  const metaChipClass = compact
+    ? 'rounded-full bg-[var(--dae-surface)] px-2.5 py-1 text-[11px] font-medium text-[var(--dae-muted)]'
+    : 'rounded-full bg-[var(--dae-surface)] px-3 py-1 text-xs font-medium text-[var(--dae-muted)]'
 
   return (
-    <article className="rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-4 shadow-[0_14px_36px_rgba(32,26,22,0.05)]">
+    <article className={`rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] ${cardPadding} shadow-[0_14px_36px_rgba(32,26,22,0.05)]`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--dae-accent-cool)]">
             {topicLabel}
           </p>
-          <h2 className="mt-2 line-clamp-2 text-lg font-semibold leading-7 text-[var(--dae-ink)]">
-            {headline}
-          </h2>
+          <h2 className={headlineClass}>{headline}</h2>
         </div>
 
         {primaryAction}
@@ -51,7 +60,7 @@ export default function ThreadOverviewCard({
           </span>
         ) : null}
         {thread.isMuted ? (
-          <span className="rounded-full bg-[var(--dae-surface)] px-3 py-1 text-xs font-medium text-[var(--dae-muted)]">
+          <span className={metaChipClass}>
             Muted
           </span>
         ) : null}
@@ -60,47 +69,59 @@ export default function ThreadOverviewCard({
             Hidden
           </span>
         ) : null}
-        <span className="rounded-full bg-[var(--dae-surface)] px-3 py-1 text-xs font-medium text-[var(--dae-muted)]">
+        <span className={metaChipClass}>
           {thread.participantCount} {thread.participantCount === 1 ? 'person' : 'people'}
         </span>
-        <span className="rounded-full bg-[var(--dae-surface)] px-3 py-1 text-xs font-medium text-[var(--dae-muted)]">
+        <span className={metaChipClass}>
           Room {thread.matchId.slice(0, 8)}
         </span>
         <span className="text-xs text-[var(--dae-muted)]">{formatDate(thread.latestActivityAt)}</span>
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {thread.participants.map((participant, index) => {
+        {visibleParticipants.map((participant, index) => {
           const theme = getParticipantTheme(index)
 
           return (
             <span
               key={`${thread.matchId}-${participant.userId}`}
-              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${theme.chipClass}`}
+              className={`inline-flex items-center gap-2 rounded-full border ${compact ? 'px-2.5 py-1 text-[11px]' : 'px-3 py-1 text-xs'} font-medium ${theme.chipClass}`}
             >
               <span className={`h-2 w-2 rounded-full ${theme.dotClass}`} />
               {participant.isMe ? `You (${participant.handle})` : participant.handle}
             </span>
           )
         })}
+        {hiddenParticipantCount > 0 ? (
+          <span className={metaChipClass}>+{hiddenParticipantCount} more</span>
+        ) : null}
       </div>
 
       {supportingDaes.length > 0 ? (
-        <div className="mt-3 space-y-2">
-          {supportingDaes.map((text) => (
-            <div
-              key={`${thread.matchId}-${text}`}
-              className="rounded-2xl bg-[var(--dae-surface)] px-3 py-2.5 text-sm leading-6 text-[var(--dae-muted)]"
-            >
-              {text}
-            </div>
-          ))}
-        </div>
+        compact ? (
+          <div className="mt-3 rounded-2xl bg-[var(--dae-surface)] px-3 py-2.5">
+            <p className="line-clamp-1 text-sm leading-6 text-[var(--dae-muted)]">{supportingDaes[0]}</p>
+            {daeTexts.length > 2 ? (
+              <p className="mt-1 text-[11px] text-[var(--dae-muted)]">+{daeTexts.length - 2} related prompts</p>
+            ) : null}
+          </div>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {supportingDaes.map((text) => (
+              <div
+                key={`${thread.matchId}-${text}`}
+                className="rounded-2xl bg-[var(--dae-surface)] px-3 py-2.5 text-sm leading-6 text-[var(--dae-muted)]"
+              >
+                {text}
+              </div>
+            ))}
+          </div>
+        )
       ) : null}
 
       {showLatestActivity && (
         <div className="mt-3 rounded-2xl bg-[var(--dae-surface)] px-3 py-3">
-          <p className="line-clamp-2 text-sm leading-6 text-[var(--dae-muted)]">
+          <p className={`${compact ? 'line-clamp-1 text-[13px] leading-5' : 'line-clamp-2 text-sm leading-6'} text-[var(--dae-muted)]`}>
             <span className="font-medium text-[var(--dae-ink)]">{thread.lastMessageSenderLabel}</span>
             {' '}
             {thread.lastMessagePreview}

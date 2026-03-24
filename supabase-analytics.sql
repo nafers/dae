@@ -21,6 +21,10 @@ create index if not exists analytics_events_user_created_idx
 
 create index if not exists analytics_events_match_created_idx
   on analytics_events (match_id, created_at desc);
+create index if not exists analytics_events_user_match_event_created_idx
+  on analytics_events (user_id, match_id, event_name, created_at desc);
+create index if not exists analytics_events_match_user_event_created_idx
+  on analytics_events (match_id, user_id, event_name, created_at desc);
 
 alter table analytics_events enable row level security;
 

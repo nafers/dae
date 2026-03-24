@@ -1,4 +1,4 @@
-import { cosineSimilarity, parseEmbedding } from '@/lib/embeddings'
+import { averageEmbeddings, cosineSimilarity, parseEmbedding } from '@/lib/embeddings'
 import { extractMeaningfulTokens, scoreTextPair } from '@/lib/text-similarity'
 import { chooseRepresentativeText, getTopicKeywords } from '@/lib/topic-label'
 
@@ -54,13 +54,22 @@ export function scoreThreadAttachmentFit({
   }
 
   const sourceEmbedding = parseEmbedding(daeEmbedding)
-  const semanticScore = threadEmbeddings.reduce<number>((bestScore, candidate) => {
-    return Math.max(bestScore, cosineSimilarity(sourceEmbedding, parseEmbedding(candidate)))
+  const parsedThreadEmbeddings = threadEmbeddings.map((candidate) => parseEmbedding(candidate))
+  const bestSemanticScore = parsedThreadEmbeddings.reduce<number>((bestScore, candidate) => {
+    return Math.max(bestScore, cosineSimilarity(sourceEmbedding, candidate))
   }, 0)
+  const averageSemanticScore = cosineSimilarity(sourceEmbedding, averageEmbeddings(parsedThreadEmbeddings))
+  const semanticScore = bestSemanticScore * 0.7 + averageSemanticScore * 0.3
 
-  const lexicalScore = cleanedThreadTexts.reduce<number>((bestScore, candidate) => {
-    return Math.max(bestScore, scoreTextPair(daeText, candidate))
-  }, 0)
+  const lexicalScores = cleanedThreadTexts
+    .map((candidate) => scoreTextPair(daeText, candidate))
+    .sort((a, b) => b - a)
+  const lexicalScore = lexicalScores[0] ?? 0
+  const secondaryLexicalScore =
+    lexicalScores.length > 1
+      ? lexicalScores.slice(0, Math.min(2, lexicalScores.length)).reduce((sum, score) => sum + score, 0) /
+        Math.min(2, lexicalScores.length)
+      : lexicalScore
 
   const topicScore = scoreTextPair(daeText, chooseRepresentativeText(cleanedThreadTexts))
   const sourceTerms = new Set(extractMeaningfulTokens(daeText))
@@ -72,10 +81,27 @@ export function scoreThreadAttachmentFit({
     ? (Date.now() - new Date(latestActivityAt).getTime()) / (1000 * 60 * 60 * 24)
     : null
   const recencyBonus =
-    daysSinceActivity === null ? 0 : daysSinceActivity <= 1 ? 0.05 : daysSinceActivity <= 7 ? 0.025 : 0
-  const crowdBonus = participantCount >= 2 && participantCount <= 4 ? 0.03 : 0
+    daysSinceActivity === null
+      ? 0
+      : daysSinceActivity <= 1
+        ? 0.06
+        : daysSinceActivity <= 3
+          ? 0.035
+          : daysSinceActivity <= 7
+            ? 0.015
+            : 0
+  const crowdBonus = participantCount >= 2 && participantCount <= 4 ? 0.04 : participantCount === 1 ? 0.015 : 0
+  const sharedTermsBonus = sharedTerms.length >= 2 ? 0.04 : sharedTerms.length === 1 ? 0.02 : 0
 
-  const score = clamp(semanticScore * 0.62 + lexicalScore * 0.24 + topicScore * 0.11 + recencyBonus + crowdBonus)
+  const score = clamp(
+    semanticScore * 0.48 +
+      lexicalScore * 0.22 +
+      secondaryLexicalScore * 0.08 +
+      topicScore * 0.14 +
+      recencyBonus +
+      crowdBonus +
+      sharedTermsBonus
+  )
 
   return {
     score,

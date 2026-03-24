@@ -4,7 +4,8 @@ import Link from 'next/link'
 import { useDeferredValue, useState } from 'react'
 import { BrowseTopicItem } from '@/lib/browse-directory'
 
-type BrowseSort = 'new' | 'popular' | 'waiting'
+type BrowseSort = 'trending' | 'new' | 'waiting'
+type BrowseFilter = 'all' | 'trending' | 'waiting' | 'connected' | 'fresh'
 
 interface Props {
   topics: BrowseTopicItem[]
@@ -12,9 +13,17 @@ interface Props {
 }
 
 const sortOptions: Array<{ key: BrowseSort; label: string }> = [
+  { key: 'trending', label: 'Trending' },
   { key: 'new', label: 'New' },
-  { key: 'popular', label: 'Popular' },
   { key: 'waiting', label: 'Waiting' },
+]
+
+const filterOptions: Array<{ key: BrowseFilter; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'trending', label: 'Trending' },
+  { key: 'waiting', label: 'Waiting' },
+  { key: 'connected', label: 'Connected' },
+  { key: 'fresh', label: 'Fresh' },
 ]
 
 function formatDate(timestamp: string) {
@@ -26,14 +35,47 @@ function formatDate(timestamp: string) {
   })
 }
 
+function getSignalLabel(topic: BrowseTopicItem) {
+  if (topic.freshCount >= 3) {
+    return `${topic.freshCount} new today`
+  }
+
+  if (topic.recentCount >= 4) {
+    return `${topic.recentCount} this week`
+  }
+
+  if (topic.waitingCount > 0) {
+    return `${topic.waitingCount} waiting`
+  }
+
+  return `${topic.matchedCount} connected`
+}
+
 export default function BrowseTopics({ topics, waitingCount }: Props) {
   const [query, setQuery] = useState('')
-  const [sort, setSort] = useState<BrowseSort>('new')
+  const [sort, setSort] = useState<BrowseSort>('trending')
+  const [filter, setFilter] = useState<BrowseFilter>('all')
   const deferredQuery = useDeferredValue(query)
   const normalizedQuery = deferredQuery.trim().toLowerCase()
 
   const filteredTopics = [...topics]
     .filter((topic) => {
+      if (filter === 'trending' && topic.trendScore < 8) {
+        return false
+      }
+
+      if (filter === 'waiting' && topic.waitingCount === 0) {
+        return false
+      }
+
+      if (filter === 'connected' && topic.matchedCount === 0) {
+        return false
+      }
+
+      if (filter === 'fresh' && topic.freshCount === 0) {
+        return false
+      }
+
       if (!normalizedQuery) {
         return true
       }
@@ -50,12 +92,9 @@ export default function BrowseTopics({ topics, waitingCount }: Props) {
       return haystack.includes(normalizedQuery)
     })
     .sort((a, b) => {
-      if (sort === 'popular') {
-        const popularityA = a.daeCount * 2 + a.matchedCount + a.waitingCount * 3
-        const popularityB = b.daeCount * 2 + b.matchedCount + b.waitingCount * 3
-
-        if (popularityB !== popularityA) {
-          return popularityB - popularityA
+      if (sort === 'trending') {
+        if (b.trendScore !== a.trendScore) {
+          return b.trendScore - a.trendScore
         }
       }
 
@@ -67,52 +106,99 @@ export default function BrowseTopics({ topics, waitingCount }: Props) {
 
       return new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime()
     })
+  const visibleIdeaCount = filteredTopics.reduce((total, topic) => total + topic.daeCount, 0)
+  const visibleWaitingCount = filteredTopics.reduce((total, topic) => total + topic.waitingCount, 0)
+  const visibleTrendingCount = filteredTopics.filter((topic) => topic.trendScore >= 8).length
 
   return (
     <div className="space-y-4">
       <section className="rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-4 shadow-[0_14px_36px_rgba(32,26,22,0.05)]">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex-1 space-y-2">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)] xl:items-start">
+          <div className="space-y-3">
             <input
               type="search"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search shows, places, situations"
+              placeholder="Search terms, habits, shows, feelings"
               className="w-full rounded-2xl border border-[var(--dae-line)] bg-[var(--dae-surface)] px-4 py-3 text-sm text-[var(--dae-ink)] placeholder:text-[var(--dae-muted)] focus:border-[var(--dae-accent-rose)] focus:outline-none"
             />
-            <p className="text-xs text-[var(--dae-muted)]">
-              {filteredTopics.length} {filteredTopics.length === 1 ? 'topic' : 'topics'}
-            </p>
+            <div className="flex flex-wrap gap-2">
+              {filterOptions.map((option) => {
+                const isActive = option.key === filter
+
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => setFilter(option.key)}
+                    className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${
+                      isActive
+                        ? 'border-[var(--dae-accent-rose)] bg-[var(--dae-accent-rose-soft)] text-[var(--dae-accent-rose)]'
+                        : 'border-[var(--dae-line)] bg-white text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            {sortOptions.map((option) => {
-              const isActive = option.key === sort
+          <div className="space-y-3">
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="rounded-2xl bg-[var(--dae-surface)] px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-muted)]">
+                  Ideas
+                </p>
+                <p className="mt-1 text-xl font-semibold text-[var(--dae-ink)]">{visibleIdeaCount}</p>
+              </div>
+              <div className="rounded-2xl bg-[var(--dae-surface)] px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-muted)]">
+                  Waiting
+                </p>
+                <p className="mt-1 text-xl font-semibold text-[var(--dae-ink)]">{visibleWaitingCount}</p>
+              </div>
+              <div className="rounded-2xl bg-[var(--dae-surface)] px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-muted)]">
+                  Rising
+                </p>
+                <p className="mt-1 text-xl font-semibold text-[var(--dae-ink)]">{visibleTrendingCount}</p>
+              </div>
+            </div>
 
-              return (
-                <button
-                  key={option.key}
-                  type="button"
-                  onClick={() => setSort(option.key)}
-                  className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${
-                    isActive
-                      ? 'border-[var(--dae-accent-rose)] bg-[var(--dae-accent-rose-soft)] text-[var(--dae-accent-rose)]'
-                      : 'border-[var(--dae-line)] bg-white text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]'
-                  }`}
+            <div className="flex flex-wrap items-center gap-2">
+              {sortOptions.map((option) => {
+                const isActive = option.key === sort
+
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => setSort(option.key)}
+                    className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${
+                      isActive
+                        ? 'border-[var(--dae-accent-rose)] bg-[var(--dae-accent-rose-soft)] text-[var(--dae-accent-rose)]'
+                        : 'border-[var(--dae-line)] bg-white text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]'
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                )
+              })}
+
+              {waitingCount > 0 ? (
+                <Link
+                  href="/review"
+                  className="rounded-full border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] px-3 py-1.5 text-sm font-medium text-[var(--dae-accent-warm)] hover:opacity-95"
                 >
-                  {option.label}
-                </button>
-              )
-            })}
+                  Review {waitingCount}
+                </Link>
+              ) : null}
+            </div>
 
-            {waitingCount > 0 ? (
-              <Link
-                href="/review"
-                className="rounded-full border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] px-3 py-1.5 text-sm font-medium text-[var(--dae-accent-warm)] hover:opacity-95"
-              >
-                Review {waitingCount}
-              </Link>
-            ) : null}
+            <p className="text-xs text-[var(--dae-muted)]">
+              {filteredTopics.length} {filteredTopics.length === 1 ? 'topic' : 'topics'} in view
+            </p>
           </div>
         </div>
       </section>
@@ -130,8 +216,21 @@ export default function BrowseTopics({ topics, waitingCount }: Props) {
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap gap-2">
+                  {topic.trendScore >= 8 ? (
+                    <span className="rounded-full bg-[var(--dae-accent)] px-3 py-1 text-xs font-medium text-white">
+                      Rising
+                    </span>
+                  ) : null}
+                  {topic.freshCount > 0 ? (
+                    <span className="rounded-full bg-[var(--dae-accent-cool-soft)] px-3 py-1 text-xs font-medium text-[var(--dae-accent-cool)]">
+                      {topic.freshCount} new
+                    </span>
+                  ) : null}
                   <span className="rounded-full bg-[var(--dae-accent-rose-soft)] px-3 py-1 text-xs font-medium text-[var(--dae-accent-rose)]">
                     {topic.daeCount} {topic.daeCount === 1 ? 'idea' : 'ideas'}
+                  </span>
+                  <span className="rounded-full bg-[var(--dae-surface)] px-3 py-1 text-xs font-medium text-[var(--dae-muted)]">
+                    {topic.uniqueUserCount} {topic.uniqueUserCount === 1 ? 'person' : 'people'}
                   </span>
                   {topic.waitingCount > 0 ? (
                     <span className="rounded-full bg-[var(--dae-accent-warm-soft)] px-3 py-1 text-xs font-medium text-[var(--dae-accent-warm)]">
@@ -144,7 +243,10 @@ export default function BrowseTopics({ topics, waitingCount }: Props) {
                     </span>
                   ) : null}
                 </div>
-                <p className="text-[11px] text-[var(--dae-muted)]">{formatDate(topic.latestAt)}</p>
+                <div className="text-right">
+                  <p className="text-[11px] text-[var(--dae-muted)]">{formatDate(topic.latestAt)}</p>
+                  <p className="mt-1 text-[11px] text-[var(--dae-muted)]">{getSignalLabel(topic)}</p>
+                </div>
               </div>
 
               <p className="mt-4 text-xl font-semibold leading-8 text-[var(--dae-ink)]">{topic.headline}</p>

@@ -5,13 +5,15 @@ import JoinThreadControl from '@/components/JoinThreadControl'
 import ThreadOverviewCard from '@/components/ThreadOverviewCard'
 import WaitingDaesList from '@/components/WaitingDaesList'
 import { isFounderEmail } from '@/lib/founders'
+import { getRequestUser } from '@/lib/request-user'
 import { scoreThreadAttachmentFit } from '@/lib/thread-fit'
-import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/server'
 import { fetchThreadDirectory } from '@/lib/thread-directory'
 
 interface WaitingDae {
   id: string
   text: string
+  embedding?: unknown
   created_at: string
 }
 
@@ -34,25 +36,23 @@ function getFitTone(score: number) {
 }
 
 export default async function ReviewPage() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getRequestUser()
 
   if (!user) redirect('/')
 
+  const admin = createAdminClient()
   const [{ data: waitingDaes }, discoverThreads] = await Promise.all([
-    supabase
+    admin
       .from('daes')
-      .select('id, text, created_at')
+      .select('id, text, embedding, created_at')
       .eq('user_id', user.id)
       .eq('status', 'unmatched')
       .order('created_at', { ascending: false }),
     fetchThreadDirectory({
       currentUserId: user.id,
       scope: 'discover',
-      limit: 12,
-      includeEmbeddings: false,
+      limit: 18,
+      includeEmbeddings: true,
       includeState: false,
       includeMessages: false,
     }),
@@ -66,7 +66,9 @@ export default async function ReviewPage() {
         thread,
         fit: scoreThreadAttachmentFit({
           daeText: dae.text,
+          daeEmbedding: dae.embedding,
           threadTexts: thread.participants.map((participant) => participant.daeText),
+          threadEmbeddings: thread.participants.map((participant) => participant.daeEmbedding),
           latestActivityAt: thread.latestActivityAt,
           participantCount: thread.participantCount,
         }),
@@ -142,6 +144,7 @@ export default async function ReviewPage() {
                   <div className="mt-4 grid gap-3">
                     {suggestions.map(({ thread, fit }) => {
                       const tone = getFitTone(fit.score)
+                      const isBestFit = suggestions[0]?.thread.matchId === thread.matchId
 
                       return (
                         <ThreadOverviewCard
@@ -157,6 +160,11 @@ export default async function ReviewPage() {
                           }
                           secondaryAction={
                             <div className="flex flex-wrap items-center gap-2">
+                              {isBestFit ? (
+                                <span className="rounded-full bg-[var(--dae-accent-cool-soft)] px-3 py-1 text-xs font-medium text-[var(--dae-accent-cool)]">
+                                  Best fit
+                                </span>
+                              ) : null}
                               <span
                                 className={`rounded-full px-3 py-1 text-xs font-medium ${tone.className}`}
                               >

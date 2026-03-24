@@ -10,6 +10,7 @@ import {
 
 interface BrowseDaeRow {
   id: string
+  user_id: string
   text: string
   status: 'matched' | 'unmatched'
   created_at: string
@@ -22,8 +23,12 @@ export interface BrowseTopicItem {
   sampleDaes: string[]
   keywords: string[]
   daeCount: number
+  uniqueUserCount: number
   waitingCount: number
   matchedCount: number
+  recentCount: number
+  freshCount: number
+  trendScore: number
   latestAt: string
 }
 
@@ -63,12 +68,15 @@ export async function fetchBrowseTopics(limit = 80) {
   const admin = createAdminClient()
   const { data } = await admin
     .from('daes')
-    .select('id, text, status, created_at')
+    .select('id, user_id, text, status, created_at')
     .order('created_at', { ascending: false })
     .limit(limit)
 
   const rows = ((data ?? []) as BrowseDaeRow[]).filter((row) => normalizeText(row.text).length > 0)
   const groups = groupDaes(rows)
+  const now = Date.now()
+  const dayMs = 1000 * 60 * 60 * 24
+  const weekMs = dayMs * 7
 
   return groups
     .map((group) => {
@@ -78,19 +86,33 @@ export async function fetchBrowseTopics(limit = 80) {
         return new Date(row.created_at).getTime() > new Date(latest).getTime() ? row.created_at : latest
       }, group[0]?.created_at ?? new Date().toISOString())
       const waitingCount = group.filter((row) => row.status === 'unmatched').length
+      const matchedCount = group.length - waitingCount
+      const freshCount = group.filter((row) => now - new Date(row.created_at).getTime() <= dayMs).length
+      const recentCount = group.filter((row) => now - new Date(row.created_at).getTime() <= weekMs).length
+      const uniqueUserCount = new Set(group.map((row) => row.user_id)).size
+      const trendScore =
+        recentCount * 3 +
+        freshCount * 4 +
+        waitingCount * 2 +
+        matchedCount +
+        uniqueUserCount
 
       return {
         id: group[0]?.id ?? headline,
         headline,
         summary: getTopicSummary(texts, {
           waitingCount,
-          matchedCount: group.length - waitingCount,
+          matchedCount,
         }),
         sampleDaes: getTopicSamples(texts, 3),
         keywords: getTopicKeywords(texts, 4),
         daeCount: group.length,
+        uniqueUserCount,
         waitingCount,
-        matchedCount: group.length - waitingCount,
+        matchedCount,
+        recentCount,
+        freshCount,
+        trendScore,
         latestAt,
       } satisfies BrowseTopicItem
     })

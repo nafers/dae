@@ -18,6 +18,10 @@ create table if not exists daes (
 
 create index if not exists daes_embedding_idx
   on daes using ivfflat (embedding vector_cosine_ops) with (lists = 10);
+create index if not exists daes_user_status_created_idx
+  on daes (user_id, status, created_at desc);
+create index if not exists daes_status_created_idx
+  on daes (status, created_at desc);
 
 -- 3. Matches table
 create table if not exists matches (
@@ -28,6 +32,9 @@ create table if not exists matches (
   created_at timestamptz not null default now()
 );
 
+create index if not exists matches_created_at_idx
+  on matches (created_at desc);
+
 -- 4. Thread participants table
 create table if not exists thread_participants (
   id         uuid primary key default gen_random_uuid(),
@@ -37,6 +44,11 @@ create table if not exists thread_participants (
   handle     text not null,
   unique (match_id, user_id)
 );
+
+create index if not exists thread_participants_user_match_idx
+  on thread_participants (user_id, match_id);
+create index if not exists thread_participants_user_handle_idx
+  on thread_participants (user_id, handle);
 
 -- 5. Messages table
 create table if not exists messages (
@@ -49,6 +61,8 @@ create table if not exists messages (
 
 create index if not exists messages_match_created_idx
   on messages (match_id, created_at);
+create index if not exists messages_match_sender_created_idx
+  on messages (match_id, sender_id, created_at desc);
 
 -- 6. Row Level Security
 alter table daes enable row level security;

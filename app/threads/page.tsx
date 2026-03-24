@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import AppShell from '@/components/AppShell'
 import ThreadOverviewCard from '@/components/ThreadOverviewCard'
 import { isFounderEmail } from '@/lib/founders'
-import { createClient } from '@/lib/supabase/server'
+import { getRequestUser } from '@/lib/request-user'
 import { fetchThreadDirectory } from '@/lib/thread-directory'
 
 interface Props {
@@ -15,10 +15,7 @@ interface Props {
 export default async function ThreadsPage({ searchParams }: Props) {
   const { hidden } = await searchParams
   const showHidden = Array.isArray(hidden) ? hidden[0] === '1' : hidden === '1'
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const user = await getRequestUser()
 
   if (!user) redirect('/')
 
@@ -28,6 +25,7 @@ export default async function ThreadsPage({ searchParams }: Props) {
     limit: 24,
   })
   const hiddenCount = threadCards.filter((thread) => thread.isHidden).length
+  const unreadCount = threadCards.filter((thread) => thread.hasUnread && !thread.isHidden).length
   const visibleThreadCards = threadCards.filter((thread) => (showHidden ? thread.isHidden : !thread.isHidden))
 
   return (
@@ -85,21 +83,47 @@ export default async function ThreadsPage({ searchParams }: Props) {
           </div>
         </div>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
-          {visibleThreadCards.map((thread) => (
-            <ThreadOverviewCard
-              key={thread.matchId}
-              thread={thread}
-              primaryAction={
-                <Link
-                  href={`/threads/${thread.matchId}`}
-                  className="rounded-full border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-cool)] hover:opacity-95"
-                >
-                  Open
-                </Link>
-              }
-            />
-          ))}
+        <div className="space-y-4">
+          <section className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-[24px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-4 py-3 shadow-[0_10px_26px_rgba(32,26,22,0.04)]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-muted)]">
+                Active
+              </p>
+              <p className="mt-1 text-2xl font-semibold text-[var(--dae-ink)]">
+                {threadCards.length - hiddenCount}
+              </p>
+            </div>
+            <div className="rounded-[24px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-4 py-3 shadow-[0_10px_26px_rgba(32,26,22,0.04)]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-muted)]">
+                New
+              </p>
+              <p className="mt-1 text-2xl font-semibold text-[var(--dae-ink)]">{unreadCount}</p>
+            </div>
+            <div className="rounded-[24px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-4 py-3 shadow-[0_10px_26px_rgba(32,26,22,0.04)]">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-muted)]">
+                Hidden
+              </p>
+              <p className="mt-1 text-2xl font-semibold text-[var(--dae-ink)]">{hiddenCount}</p>
+            </div>
+          </section>
+
+          <div className="grid gap-3 xl:grid-cols-2">
+            {visibleThreadCards.map((thread) => (
+              <ThreadOverviewCard
+                key={thread.matchId}
+                thread={thread}
+                compact
+                primaryAction={
+                  <Link
+                    href={`/threads/${thread.matchId}`}
+                    className="rounded-full border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-cool)] hover:opacity-95"
+                  >
+                    Open
+                  </Link>
+                }
+              />
+            ))}
+          </div>
         </div>
       )}
     </AppShell>
