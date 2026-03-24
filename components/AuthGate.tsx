@@ -1,86 +1,116 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-export default function AuthGate() {
+interface Props {
+  nextPath?: string | null
+  authError?: string | null
+}
+
+export default function AuthGate({ nextPath, authError }: Props) {
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
-  const [error, setError] = useState('')
+  const [error, setError] = useState(
+    authError === 'auth' ? 'That link expired. Request a new one.' : ''
+  )
   const router = useRouter()
 
-  const supabase = createClient()
+  const [supabase] = useState(() => createClient())
+  const safeNext = nextPath?.startsWith('/') ? nextPath : '/submit'
 
-  // If already logged in, redirect to /submit
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) router.replace('/submit')
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (
+        session &&
+        (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION')
+      ) {
+        router.replace(safeNext)
+        router.refresh()
+      }
     })
-  }, [])
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+    async function checkSession() {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (session) {
+        router.replace(safeNext)
+        router.refresh()
+      }
+    }
+
+    checkSession()
+
+    return () => subscription.unsubscribe()
+  }, [router, safeNext, supabase.auth])
+
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
     setLoading(true)
     setError('')
 
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+    const response = await fetch('/api/auth/magic-link', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({
+        email,
+        nextPath: safeNext,
+      }),
     })
+    const data = await response.json()
 
-    if (error) {
-      setError(error.message)
-      setLoading(false)
+    if (!response.ok) {
+      setError(typeof data?.error === 'string' ? data.error : 'Unable to send link.')
     } else {
       setSent(true)
-      setLoading(false)
     }
+
+    setLoading(false)
   }
 
   if (sent) {
     return (
-      <div className="text-center py-8">
-        <div className="text-4xl mb-4">📬</div>
-        <h2 className="text-xl font-semibold text-stone-800 mb-2">Check your email</h2>
-        <p className="text-stone-500">
-          We sent a magic link to <strong>{email}</strong>.<br />
-          Click it to get started — no password needed.
+      <div className="text-center">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--dae-accent)]">
+          Link sent
         </p>
+        <h2 className="mt-2 text-2xl font-semibold text-[var(--dae-ink)]">Check your email.</h2>
+        <p className="mt-3 text-sm leading-6 text-[var(--dae-muted)]">{email}</p>
       </div>
     )
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <form onSubmit={handleSubmit} className="space-y-4">
       <div>
-        <label htmlFor="email" className="block text-sm font-medium text-stone-700 mb-1">
-          Enter your email to get started
+        <label htmlFor="email" className="block text-sm font-medium text-[var(--dae-ink)]">
+          Email
         </label>
         <input
           id="email"
           type="email"
           value={email}
-          onChange={(e) => setEmail(e.target.value)}
+          onChange={(event) => setEmail(event.target.value)}
           placeholder="you@example.com"
           required
-          className="w-full px-4 py-3 rounded-xl border border-stone-200 bg-white text-stone-900 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-stone-400 focus:border-transparent text-base"
+          className="mt-2 w-full rounded-2xl border border-[var(--dae-line)] bg-[var(--dae-surface)] px-4 py-3 text-base text-[var(--dae-ink)] placeholder:text-stone-400 focus:border-[var(--dae-accent)] focus:outline-none"
         />
       </div>
-      {error && <p className="text-red-500 text-sm">{error}</p>}
+      {error ? <p className="text-sm text-red-500">{error}</p> : null}
       <button
         type="submit"
         disabled={loading || !email}
-        className="w-full py-3 px-6 bg-stone-900 text-white rounded-xl font-medium text-base hover:bg-stone-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        className="w-full rounded-2xl bg-[var(--dae-accent)] px-6 py-3 text-base font-medium text-white transition-all hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {loading ? 'Sending…' : 'Send magic link →'}
+        {loading ? 'Sending...' : 'Send link'}
       </button>
-      <p className="text-center text-xs text-stone-400 pt-1">
-        No password. No spam. Just a link.
-      </p>
     </form>
   )
 }

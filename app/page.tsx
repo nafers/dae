@@ -1,46 +1,46 @@
 import AuthGate from '@/components/AuthGate'
+import { redirect } from 'next/navigation'
 
-export default function Home() {
+interface Props {
+  searchParams: Promise<{
+    code?: string | string[]
+    error?: string | string[]
+    next?: string | string[]
+  }>
+}
+
+export default async function Home({ searchParams }: Props) {
+  const { code, error, next } = await searchParams
+  const authCode = Array.isArray(code) ? code[0] : code
+  const authError = Array.isArray(error) ? error[0] : error
+  const nextPath = Array.isArray(next) ? next[0] : next
+
+  if (authCode) {
+    const callbackParams = new URLSearchParams({ code: authCode })
+    if (nextPath?.startsWith('/')) {
+      callbackParams.set('next', nextPath)
+    }
+    redirect(`/auth/callback?${callbackParams.toString()}`)
+  }
+
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center px-4 py-16 bg-stone-50">
+    <main className="flex min-h-screen items-center justify-center px-4 py-16">
       <div className="w-full max-w-md">
-        {/* Header */}
-        <div className="text-center mb-10">
-          <h1 className="text-4xl font-bold tracking-tight text-stone-900 mb-3">
-            Does Anyone Else…
+        <div className="mb-8 text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[var(--dae-accent)]">
+            DAE
+          </p>
+          <h1 className="mt-3 text-5xl font-semibold tracking-tight text-[var(--dae-ink)]">
+            Does Anyone Else?
           </h1>
-          <p className="text-stone-500 text-lg leading-relaxed">
-            Submit something you've always wondered about yourself.
-            Find out you're not alone — and talk to the one person who gets it.
+          <p className="mt-3 text-sm text-[var(--dae-muted)]">
+            Sign in. Submit. Match. Chat.
           </p>
         </div>
 
-        {/* How it works */}
-        <div className="bg-white rounded-2xl border border-stone-200 p-6 mb-8 space-y-4">
-          <div className="flex gap-3 items-start">
-            <span className="text-2xl">✍️</span>
-            <div>
-              <p className="font-medium text-stone-800">Submit a DAE</p>
-              <p className="text-stone-500 text-sm">Something you do, think, or feel that you've wondered about</p>
-            </div>
-          </div>
-          <div className="flex gap-3 items-start">
-            <span className="text-2xl">🔍</span>
-            <div>
-              <p className="font-medium text-stone-800">We find your match</p>
-              <p className="text-stone-500 text-sm">AI matches you with someone who submitted something similar</p>
-            </div>
-          </div>
-          <div className="flex gap-3 items-start">
-            <span className="text-2xl">💬</span>
-            <div>
-              <p className="font-medium text-stone-800">Talk anonymously</p>
-              <p className="text-stone-500 text-sm">Chat with your match — no names, just curiosity</p>
-            </div>
-          </div>
+        <div className="rounded-[32px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-6 shadow-[0_18px_40px_rgba(32,26,22,0.06)]">
+          <AuthGate nextPath={nextPath} authError={authError} />
         </div>
-
-        <AuthGate />
       </div>
     </main>
   )
