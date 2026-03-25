@@ -109,7 +109,7 @@ export async function fetchActivityFeed(currentUserId: string) {
         kind: 'follow' as const,
         title: follow.label,
         detail: topic.summary,
-        href: `/browse?q=${encodeURIComponent(follow.searchQuery)}`,
+        href: `/topics/${encodeURIComponent(follow.topicKey)}`,
         timestamp: topic.latestAt,
         tone: 'rose' as const,
       }

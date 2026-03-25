@@ -339,6 +339,12 @@ export default function BrowseTopics({
                     Attach a waiting DAE
                   </Link>
                 ) : null}
+                <Link
+                  href={`/topics/${encodeURIComponent(topic.topicKey)}`}
+                  className="rounded-full border border-[var(--dae-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-ink)] hover:border-[var(--dae-muted)]"
+                >
+                  Open topic
+                </Link>
                 <FollowTopicButton
                   topicKey={topic.topicKey}
                   headline={topic.headline}
@@ -347,7 +353,7 @@ export default function BrowseTopics({
                   initialFollowing={followedTopicKeySet.has(topic.topicKey)}
                 />
                 <ShareButton
-                  path={`/browse?q=${encodeURIComponent(topic.searchQuery)}`}
+                  path={`/topics/${encodeURIComponent(topic.topicKey)}`}
                   title={`DAE topic: ${topic.label}`}
                   text={topic.summary}
                   label="Share topic"

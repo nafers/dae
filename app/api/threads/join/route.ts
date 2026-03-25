@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { trackAnalyticsEvent } from '@/lib/analytics'
+import { fetchBlockedUserIdsForUser } from '@/lib/blocks'
 import { generateHandle } from '@/lib/handles'
 import { getRequestUser } from '@/lib/request-user'
 import { createAdminClient } from '@/lib/supabase/server'
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient()
+    const blockedUserIds = await fetchBlockedUserIdsForUser(user.id)
     const [{ data: thread }, { data: dae }, { data: existingParticipant }] = await Promise.all([
       admin.from('matches').select('id').eq('id', matchId).maybeSingle(),
       admin
@@ -57,13 +59,17 @@ export async function POST(request: Request) {
     const [{ data: threadParticipants }, { data: priorHandleRows }] = await Promise.all([
       admin
         .from('thread_participants')
-        .select('handle')
+        .select('user_id, handle')
         .eq('match_id', matchId),
       admin
         .from('thread_participants')
         .select('handle')
         .eq('user_id', user.id),
     ])
+
+    if ((threadParticipants ?? []).some((participant) => blockedUserIds.has(participant.user_id))) {
+      return NextResponse.json({ error: 'You blocked someone in this room' }, { status: 400 })
+    }
 
     const excludedHandles = new Set<string>()
 

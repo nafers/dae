@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getRequestUser } from '@/lib/request-user'
 import { createAdminClient } from '@/lib/supabase/server'
+import { userHasBlockedParticipantInMatch } from '@/lib/thread-access'
 
 interface DaeRelation {
   text: string
@@ -37,6 +38,10 @@ export async function GET(request: Request) {
 
     if (!accessRow) {
       return NextResponse.json({ error: 'You do not have access to this thread' }, { status: 403 })
+    }
+
+    if (await userHasBlockedParticipantInMatch({ currentUserId: user.id, matchId })) {
+      return NextResponse.json({ error: 'This room is unavailable because you blocked someone in it' }, { status: 403 })
     }
 
     const { data: participants, error } = await admin

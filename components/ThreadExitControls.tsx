@@ -7,6 +7,11 @@ interface Props {
   matchId: string
   initialMuted?: boolean
   initialHidden?: boolean
+  otherParticipants?: Array<{
+    userId: string
+    handle: string
+  }>
+  initialBlockedUserIds?: string[]
 }
 
 type ExitMode = 'leave' | 'detach'
@@ -23,6 +28,8 @@ export default function ThreadExitControls({
   matchId,
   initialMuted = false,
   initialHidden = false,
+  otherParticipants = [],
+  initialBlockedUserIds = [],
 }: Props) {
   const router = useRouter()
   const [pendingMode, setPendingMode] = useState<ExitMode | null>(null)
@@ -31,6 +38,9 @@ export default function ThreadExitControls({
   const [muted, setMuted] = useState(initialMuted)
   const [hidden, setHidden] = useState(initialHidden)
   const [reportReason, setReportReason] = useState(reportReasons[0]?.value ?? 'not-a-fit')
+  const [blockedUserIds, setBlockedUserIds] = useState(initialBlockedUserIds)
+  const [selectedBlockUserId, setSelectedBlockUserId] = useState(otherParticipants[0]?.userId ?? '')
+  const [blocking, setBlocking] = useState(false)
 
   async function submitExit(mode: ExitMode) {
     if (pendingMode || pendingAction) return
@@ -113,6 +123,46 @@ export default function ThreadExitControls({
       setPendingAction(null)
     }
   }
+
+  async function submitBlock(action: 'block' | 'unblock') {
+    if (!selectedBlockUserId || pendingMode || pendingAction || blocking) return
+
+    setBlocking(true)
+    setError('')
+
+    try {
+      const response = await fetch('/api/blocks', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action,
+          matchId,
+          targetUserId: selectedBlockUserId,
+        }),
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(typeof data?.error === 'string' ? data.error : 'Unable to update block state.')
+      }
+
+      if (action === 'block') {
+        setBlockedUserIds((current) => (current.includes(selectedBlockUserId) ? current : [...current, selectedBlockUserId]))
+        router.push(typeof data?.redirectTo === 'string' ? data.redirectTo : '/threads')
+        return
+      }
+
+      setBlockedUserIds((current) => current.filter((userId) => userId !== selectedBlockUserId))
+    } catch (blockError) {
+      setError(blockError instanceof Error ? blockError.message : 'Unable to update block state.')
+    } finally {
+      setBlocking(false)
+    }
+  }
+
+  const selectedBlocked = blockedUserIds.includes(selectedBlockUserId)
 
   return (
     <div className="space-y-3 rounded-2xl bg-[var(--dae-surface)] px-3 py-3">
@@ -206,6 +256,38 @@ export default function ThreadExitControls({
           {pendingAction === 'report' ? 'Reporting...' : 'Report'}
         </button>
       </div>
+
+      {otherParticipants.length > 0 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={selectedBlockUserId}
+            onChange={(event) => setSelectedBlockUserId(event.target.value)}
+            disabled={pendingMode !== null || pendingAction !== null || blocking}
+            className="rounded-full border border-[var(--dae-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-ink)] focus:border-[var(--dae-accent-rose)] focus:outline-none disabled:opacity-50"
+          >
+            {otherParticipants.map((participant) => (
+              <option key={participant.userId} value={participant.userId}>
+                {participant.handle}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={() => void submitBlock(selectedBlocked ? 'unblock' : 'block')}
+            disabled={!selectedBlockUserId || pendingMode !== null || pendingAction !== null || blocking}
+            className={`rounded-full px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
+              selectedBlocked
+                ? 'border border-[var(--dae-line)] bg-white text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]'
+                : 'bg-[var(--dae-accent-rose)] text-white hover:opacity-95'
+            }`}
+          >
+            {blocking ? (selectedBlocked ? 'Unblocking...' : 'Blocking...') : selectedBlocked ? 'Unblock' : 'Block'}
+          </button>
+          <p className="text-xs text-[var(--dae-muted)]">
+            Block hides this room and removes future suggestions with that person.
+          </p>
+        </div>
+      ) : null}
 
       {error ? <p className="w-full text-xs text-red-500">{error}</p> : null}
     </div>

@@ -79,6 +79,7 @@ export default function AppShell({
 }: Props) {
   const theme = tabStyles[activeTab]
   const founder = isFounderEmail(userEmail)
+  const accountReady = Boolean(userEmail)
   const testAccountEmails = canUseTestSwitcher(userEmail) ? getTestAccountEmails() : []
 
   return (
@@ -97,46 +98,50 @@ export default function AppShell({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              {testAccountEmails.length > 1 ? (
-                <TestAccountSwitcher userEmail={userEmail} testAccountEmails={testAccountEmails} />
-              ) : null}
-              <div className="hidden md:block">
-                <ActivityNav active={activeTab === 'activity'} />
-              </div>
-              {founder ? (
+              {accountReady ? (
                 <>
+                  {testAccountEmails.length > 1 ? (
+                    <TestAccountSwitcher userEmail={userEmail} testAccountEmails={testAccountEmails} />
+                  ) : null}
+                  <div className="hidden md:block">
+                    <ActivityNav active={activeTab === 'activity'} />
+                  </div>
+                  {founder ? (
+                    <>
+                      <Link
+                        href="/metrics"
+                        className="rounded-full border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] shadow-sm hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
+                      >
+                        Metrics
+                      </Link>
+                      <Link
+                        href="/moderation"
+                        className={`rounded-full border px-3 py-1.5 text-xs font-medium shadow-sm transition-colors ${
+                          activeTab === 'moderation'
+                            ? 'border-[var(--dae-accent-rose)] bg-[var(--dae-accent-rose-soft)] text-[var(--dae-accent-rose)]'
+                            : 'border-[var(--dae-line)] bg-[var(--dae-surface-strong)] text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]'
+                        }`}
+                      >
+                        Mod
+                      </Link>
+                    </>
+                  ) : null}
                   <Link
-                    href="/metrics"
-                    className="rounded-full border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] shadow-sm hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
-                  >
-                    Metrics
-                  </Link>
-                  <Link
-                    href="/moderation"
+                    href="/settings"
                     className={`rounded-full border px-3 py-1.5 text-xs font-medium shadow-sm transition-colors ${
-                      activeTab === 'moderation'
-                        ? 'border-[var(--dae-accent-rose)] bg-[var(--dae-accent-rose-soft)] text-[var(--dae-accent-rose)]'
+                      activeTab === 'settings'
+                        ? 'border-[var(--dae-line)] bg-[var(--dae-surface)] text-[var(--dae-ink)]'
                         : 'border-[var(--dae-line)] bg-[var(--dae-surface-strong)] text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]'
                     }`}
                   >
-                    Mod
+                    Settings
                   </Link>
+                  {actions}
+                  <span className="hidden max-w-[240px] truncate rounded-full border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] shadow-sm sm:inline-flex">
+                    {userEmail}
+                  </span>
                 </>
               ) : null}
-              <Link
-                href="/settings"
-                className={`rounded-full border px-3 py-1.5 text-xs font-medium shadow-sm transition-colors ${
-                  activeTab === 'settings'
-                    ? 'border-[var(--dae-line)] bg-[var(--dae-surface)] text-[var(--dae-ink)]'
-                    : 'border-[var(--dae-line)] bg-[var(--dae-surface-strong)] text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]'
-                }`}
-              >
-                Settings
-              </Link>
-              {actions}
-              <span className="hidden max-w-[240px] truncate rounded-full border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] shadow-sm sm:inline-flex">
-                {userEmail}
-              </span>
             </div>
           </div>
 
@@ -194,27 +199,29 @@ export default function AppShell({
         <div className={compact ? 'mt-4' : 'mt-6'}>{children}</div>
       </section>
 
-      <nav className="fixed inset-x-3 bottom-3 z-30 rounded-[28px] border border-[var(--dae-line)] bg-[rgba(255,250,244,0.96)] p-2 shadow-[0_18px_40px_rgba(32,26,22,0.12)] backdrop-blur-xl md:hidden">
-        <div className="grid grid-cols-5 gap-2">
-          {mobileTabs.map((tab) => {
-            const isActive = tab.key === activeTab
+      {accountReady ? (
+        <nav className="fixed inset-x-3 bottom-3 z-30 rounded-[28px] border border-[var(--dae-line)] bg-[rgba(255,250,244,0.96)] p-2 shadow-[0_18px_40px_rgba(32,26,22,0.12)] backdrop-blur-xl md:hidden">
+          <div className="grid grid-cols-5 gap-2">
+            {mobileTabs.map((tab) => {
+              const isActive = tab.key === activeTab
 
-            return (
-              <Link
-                key={tab.key}
-                href={tab.href}
-                className={`rounded-2xl px-2 py-2 text-center text-[11px] font-semibold transition-all ${
-                  isActive
-                    ? tabStyles[tab.key].active
-                    : 'border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] text-[var(--dae-muted)]'
-                }`}
-              >
-                {tab.label}
-              </Link>
-            )
-          })}
-        </div>
-      </nav>
+              return (
+                <Link
+                  key={tab.key}
+                  href={tab.href}
+                  className={`rounded-2xl px-2 py-2 text-center text-[11px] font-semibold transition-all ${
+                    isActive
+                      ? tabStyles[tab.key].active
+                      : 'border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] text-[var(--dae-muted)]'
+                  }`}
+                >
+                  {tab.label}
+                </Link>
+              )
+            })}
+          </div>
+        </nav>
+      ) : null}
     </main>
   )
 }

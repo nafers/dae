@@ -47,6 +47,12 @@ interface Props {
     notQuiteCount: number
     mySignal: RoomSignalType | null
   }
+  matchReason: string
+  matchConfidence: string
+  matchSharedTerms: string[]
+  topicKey: string
+  initialLastSeenAt: string | null
+  blockedUserIds: string[]
 }
 
 function orderParticipants(participants: Participant[], myUserId: string) {
@@ -71,6 +77,12 @@ export default function ChatThread({
   supportingDaes,
   initialJoinRequests,
   initialRoomSignalSummary,
+  matchReason,
+  matchConfidence,
+  matchSharedTerms,
+  topicKey,
+  initialLastSeenAt,
+  blockedUserIds,
 }: Props) {
   const [participants, setParticipants] = useState<Participant[]>(
     orderParticipants(initialParticipants, myUserId)
@@ -381,6 +393,17 @@ export default function ChatThread({
                 Also here: {supportingDaes.join(' | ')}
               </p>
             ) : null}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-[var(--dae-accent-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--dae-accent)]">
+                {matchConfidence}
+              </span>
+              <span className="text-xs text-[var(--dae-muted)]">{matchReason}</span>
+              {matchSharedTerms.length > 0 ? (
+                <span className="rounded-full bg-[var(--dae-surface-strong)] px-2.5 py-1 text-[11px] font-medium text-[var(--dae-muted)]">
+                  {matchSharedTerms.join(', ')}
+                </span>
+              ) : null}
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -399,6 +422,12 @@ export default function ChatThread({
               className="rounded-full border border-[var(--dae-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
             >
               All chats
+            </Link>
+            <Link
+              href={`/topics/${encodeURIComponent(topicKey)}`}
+              className="rounded-full border border-[var(--dae-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
+            >
+              Topic
             </Link>
             <ShareButton
               path={`/invite/${encodeURIComponent(matchId)}`}
@@ -456,6 +485,13 @@ export default function ChatThread({
             matchId={matchId}
             initialMuted={initialThreadState.muted}
             initialHidden={initialThreadState.hidden}
+            otherParticipants={participantMeta
+              .filter((participant) => !participant.isMe)
+              .map((participant) => ({
+                userId: participant.userId,
+                handle: participant.handle,
+              }))}
+            initialBlockedUserIds={blockedUserIds}
           />
         </div>
       </div>
@@ -465,10 +501,16 @@ export default function ChatThread({
           <div className="py-8 text-center text-sm text-[var(--dae-muted)]">No messages yet.</div>
         ) : null}
 
-        {messages.map((message) => {
+        {messages.map((message, index) => {
           const isMe = message.sender_id === myUserId
           const participant = participantByUserId.get(message.sender_id)
           const bubbleTheme = participant?.theme ?? getParticipantTheme(0)
+          const previousMessage = messages[index - 1]
+          const previousSameSender = previousMessage?.sender_id === message.sender_id
+          const previousWithinWindow =
+            previousMessage &&
+            new Date(message.created_at).getTime() - new Date(previousMessage.created_at).getTime() < 1000 * 60 * 8
+          const showIdentity = !(previousSameSender && previousWithinWindow)
           const senderLabel = participant
             ? participant.isMe
               ? `You (${participant.handle})`
@@ -476,21 +518,65 @@ export default function ChatThread({
             : isMe
               ? 'You'
               : 'Someone'
+          const showDateDivider =
+            !previousMessage ||
+            new Date(previousMessage.created_at).toDateString() !== new Date(message.created_at).toDateString()
+          const showUnreadDivider =
+            initialLastSeenAt &&
+            !previousMessage &&
+            !isMe &&
+            new Date(message.created_at).getTime() > new Date(initialLastSeenAt).getTime()
+              ? true
+              : Boolean(
+                  initialLastSeenAt &&
+                    previousMessage &&
+                    new Date(previousMessage.created_at).getTime() <= new Date(initialLastSeenAt).getTime() &&
+                    new Date(message.created_at).getTime() > new Date(initialLastSeenAt).getTime() &&
+                    !isMe
+                )
 
           return (
-            <div key={message.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+            <div key={message.id}>
+              {showDateDivider ? (
+                <div className="my-4 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-[var(--dae-line)]" />
+                  <p className="text-[11px] font-medium text-[var(--dae-muted)]">
+                    {new Date(message.created_at).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                    })}
+                  </p>
+                  <div className="h-px flex-1 bg-[var(--dae-line)]" />
+                </div>
+              ) : null}
+              {showUnreadDivider ? (
+                <div className="my-4 flex items-center gap-3">
+                  <div className="h-px flex-1 bg-[var(--dae-accent-cool)]/30" />
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent-cool)]">
+                    New since you left
+                  </p>
+                  <div className="h-px flex-1 bg-[var(--dae-accent-cool)]/30" />
+                </div>
+              ) : null}
+              <div className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
               <div
                 className={`flex max-w-[88%] items-end gap-2 ${
                   isMe ? 'flex-row-reverse' : 'flex-row'
                 }`}
               >
-                <div
-                  className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${bubbleTheme.avatarClass}`}
-                >
-                  {getHandleInitial(participant?.handle ?? senderLabel)}
-                </div>
+                {showIdentity ? (
+                  <div
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${bubbleTheme.avatarClass}`}
+                  >
+                    {getHandleInitial(participant?.handle ?? senderLabel)}
+                  </div>
+                ) : (
+                  <div className="w-8 shrink-0" />
+                )}
                 <div className={`flex flex-col gap-1 ${isMe ? 'items-end' : 'items-start'}`}>
-                  <span className={`px-1 text-[10px] ${bubbleTheme.labelClass}`}>{senderLabel}</span>
+                  {showIdentity ? (
+                    <span className={`px-1 text-[10px] ${bubbleTheme.labelClass}`}>{senderLabel}</span>
+                  ) : null}
                   <div
                     className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed shadow-sm ${bubbleTheme.bubbleClass} ${
                       isMe ? 'rounded-br-sm' : 'rounded-bl-sm'
@@ -503,6 +589,7 @@ export default function ChatThread({
                   </span>
                 </div>
               </div>
+            </div>
             </div>
           )
         })}

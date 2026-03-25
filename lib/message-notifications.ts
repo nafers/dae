@@ -1,5 +1,6 @@
 import { Resend } from 'resend'
 import { trackAnalyticsEvents } from '@/lib/analytics'
+import { fetchActiveBlockPairs, hasActiveBlockBetween } from '@/lib/blocks'
 import { getThreadUserState, fetchThreadUserStates } from '@/lib/thread-state'
 import { chooseRepresentativeText, getTopicLabel } from '@/lib/topic-label'
 import { createAdminClient } from '@/lib/supabase/server'
@@ -97,6 +98,7 @@ export async function sendThreadMessageNotifications({
       )
     ).filter((target): target is NotificationTarget => target !== null)
     const preferenceMap = await fetchUserPreferencesMap(recipientTargets.map((target) => target.userId))
+    const blockPairs = await fetchActiveBlockPairs([senderId, ...recipientTargets.map((target) => target.userId)])
 
     if (recipientTargets.length === 0) {
       return
@@ -127,6 +129,19 @@ export async function sendThreadMessageNotifications({
     for (const target of recipientTargets) {
       const recipientParticipant = recipients.find((participant) => participant.user_id === target.userId)
       if (!recipientParticipant) {
+        continue
+      }
+
+      if (hasActiveBlockBetween(blockPairs, senderId, target.userId)) {
+        analyticsEvents.push({
+          eventName: 'message_email_skipped',
+          userId: target.userId,
+          matchId,
+          daeId: recipientParticipant.dae_id,
+          metadata: {
+            reason: 'blocked',
+          },
+        })
         continue
       }
 

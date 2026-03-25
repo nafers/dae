@@ -3,6 +3,7 @@ import { trackAnalyticsEvents } from '@/lib/analytics'
 import { sendThreadMessageNotifications } from '@/lib/message-notifications'
 import { getRequestUser } from '@/lib/request-user'
 import { createAdminClient } from '@/lib/supabase/server'
+import { userHasBlockedParticipantInMatch } from '@/lib/thread-access'
 
 async function getAuthedParticipant(matchId: string) {
   const user = await getRequestUser()
@@ -21,6 +22,12 @@ async function getAuthedParticipant(matchId: string) {
   if (!participant) {
     return {
       error: NextResponse.json({ error: 'You do not have access to this thread' }, { status: 403 }),
+    }
+  }
+
+  if (await userHasBlockedParticipantInMatch({ currentUserId: user.id, matchId })) {
+    return {
+      error: NextResponse.json({ error: 'This room is unavailable because you blocked someone in it' }, { status: 403 }),
     }
   }
 

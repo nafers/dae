@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { fetchBlockedUserIdsForUser } from '@/lib/blocks'
 import { generateHandle } from '@/lib/handles'
 import { trackAnalyticsEvents } from '@/lib/analytics'
 import { fetchPendingJoinRequestsForMatch } from '@/lib/thread-join-requests'
@@ -68,6 +69,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Missing daeId' }, { status: 400 })
       }
 
+      const blockedUserIds = await fetchBlockedUserIdsForUser(user.id)
       const [{ data: dae }, { data: existingParticipant }] = await Promise.all([
         admin
           .from('daes')
@@ -93,6 +95,15 @@ export async function POST(request: Request) {
 
       if (existingParticipant) {
         return NextResponse.json({ error: 'You are already in this room' }, { status: 400 })
+      }
+
+      const { data: roomParticipants } = await admin
+        .from('thread_participants')
+        .select('user_id')
+        .eq('match_id', matchId)
+
+      if ((roomParticipants ?? []).some((participant) => blockedUserIds.has(participant.user_id))) {
+        return NextResponse.json({ error: 'You blocked someone in this room' }, { status: 400 })
       }
 
       const pendingRequests = await fetchPendingJoinRequestsForMatch(matchId)
@@ -188,6 +199,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
     }
 
+    const approverBlockedUserIds = await fetchBlockedUserIdsForUser(user.id)
     const [{ data: existingParticipant }, { data: requesterDae }, { data: threadParticipants }, { data: priorHandleRows }] =
       await Promise.all([
         admin
@@ -211,6 +223,10 @@ export async function POST(request: Request) {
           .select('handle')
           .eq('user_id', joinRequest.requesterId),
       ])
+
+    if (approverBlockedUserIds.has(joinRequest.requesterId)) {
+      return NextResponse.json({ error: 'You blocked this user' }, { status: 400 })
+    }
 
     if (existingParticipant) {
       return NextResponse.json({ error: 'That user already joined this room' }, { status: 400 })

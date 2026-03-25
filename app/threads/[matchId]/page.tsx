@@ -3,11 +3,14 @@ import { redirect, notFound } from 'next/navigation'
 import AppShell from '@/components/AppShell'
 import ChatThread from '@/components/ChatThread'
 import { trackAnalyticsEvent } from '@/lib/analytics'
+import { fetchBlockedUserIdsForUser } from '@/lib/blocks'
 import { fetchRoomSignalSummary } from '@/lib/quality-signals'
 import { getRequestUser } from '@/lib/request-user'
 import { createAdminClient } from '@/lib/supabase/server'
 import { fetchPendingJoinRequestsForMatch } from '@/lib/thread-join-requests'
+import { userHasBlockedParticipantInMatch } from '@/lib/thread-access'
 import { fetchThreadUserStates, getThreadUserState } from '@/lib/thread-state'
+import { scoreThreadAttachmentFit } from '@/lib/thread-fit'
 import { getTopicPresentation } from '@/lib/topic-intelligence'
 
 interface Props {
@@ -69,6 +72,9 @@ export default async function ThreadPage({ params }: Props) {
   const typedParticipants = participants as ThreadParticipant[]
   const myParticipant = typedParticipants.find((participant) => participant.user_id === user.id)
   if (!myParticipant) notFound()
+  if (await userHasBlockedParticipantInMatch({ currentUserId: user.id, matchId })) {
+    redirect('/threads')
+  }
 
   const orderedParticipants: ChatParticipant[] = [
     {
@@ -94,6 +100,7 @@ export default async function ThreadPage({ params }: Props) {
     topicPresentation,
     joinRequests,
     roomSignalSummary,
+    blockedUserIds,
   ] =
     await Promise.all([
       admin
@@ -124,6 +131,7 @@ export default async function ThreadPage({ params }: Props) {
         matchId,
         currentUserId: user.id,
       }),
+      fetchBlockedUserIdsForUser(user.id),
     ])
 
   const initialThreadState = getThreadUserState(threadStateMap, user.id, matchId)
@@ -131,6 +139,10 @@ export default async function ThreadPage({ params }: Props) {
   const threadTopicLabel = topicPresentation.label || 'Chat'
   const threadSummary = topicPresentation.summary
   const supportingDaes = daeTexts.filter((text) => text !== threadHeadline).slice(0, 2)
+  const myFit = scoreThreadAttachmentFit({
+    daeText: getDaeText(myParticipant.daes),
+    threadTexts: orderedParticipants.filter((participant) => participant.userId !== user.id).map((participant) => participant.dae),
+  })
   const initialFeedback = ((feedbackEvent?.metadata as { verdict?: MatchFeedback } | null)?.verdict ??
     null) as MatchFeedback
 
@@ -169,6 +181,12 @@ export default async function ThreadPage({ params }: Props) {
         supportingDaes={supportingDaes}
         initialJoinRequests={joinRequests}
         initialRoomSignalSummary={roomSignalSummary}
+        matchReason={myFit.reason}
+        matchConfidence={myFit.confidenceLabel}
+        matchSharedTerms={myFit.sharedTerms}
+        topicKey={topicPresentation.topicKey}
+        initialLastSeenAt={initialThreadState.lastSeenAt}
+        blockedUserIds={[...blockedUserIds]}
       />
     </AppShell>
   )

@@ -2,6 +2,7 @@ import { after, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { generateHandle } from '@/lib/handles'
 import { sendTopicFollowDigest } from '@/lib/follow-notifications'
+import { findBestMatchCandidate } from '@/lib/matching'
 import { trackAnalyticsEvent } from '@/lib/analytics'
 import { getRequestUser } from '@/lib/request-user'
 import { createAdminClient } from '@/lib/supabase/server'
@@ -51,18 +52,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to save DAE' }, { status: 500 })
     }
 
-    const { data: matches, error: matchError } = await admin.rpc('find_match', {
-      query_embedding: JSON.stringify(embedding),
-      exclude_user_id: user.id,
-      match_threshold: MATCH_THRESHOLD,
+    const bestMatch = await findBestMatchCandidate({
+      currentUserId: user.id,
+      sourceText: trimmed,
+      sourceEmbedding: embedding,
+      threshold: MATCH_THRESHOLD,
     })
 
-    if (matchError) {
-      console.error('Match error:', matchError)
-      return NextResponse.json({ status: 'waiting' })
-    }
-
-    if (!matches || matches.length === 0) {
+    if (!bestMatch) {
       after(async () => {
         await sendTopicFollowDigest({
           submitterId: user.id,
@@ -81,22 +78,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ status: 'waiting' })
     }
 
-    const bestMatch = matches[0]
-
-    const { data: matchedDae } = await admin
-      .from('daes')
-      .select('user_id')
-      .eq('id', bestMatch.id)
-      .single()
-
-    if (!matchedDae) {
-      return NextResponse.json({ status: 'waiting' })
-    }
-
     const { data: priorHandleRows } = await admin
       .from('thread_participants')
       .select('user_id, handle')
-      .in('user_id', [user.id, matchedDae.user_id])
+      .in('user_id', [user.id, bestMatch.userId])
 
     const usedHandlesByUser = new Map<string, Set<string>>()
 
@@ -112,7 +97,7 @@ export async function POST(request: Request) {
     )
     reservedHandles.add(handleA)
     const handleB = generateHandle(
-      new Set([...(usedHandlesByUser.get(matchedDae.user_id) ?? []), ...reservedHandles])
+      new Set([...(usedHandlesByUser.get(bestMatch.userId) ?? []), ...reservedHandles])
     )
 
     const { data: matchRecord, error: matchInsertError } = await admin
@@ -134,7 +119,7 @@ export async function POST(request: Request) {
       { match_id: matchRecord.id, user_id: user.id, dae_id: newDae.id, handle: handleA },
       {
         match_id: matchRecord.id,
-        user_id: matchedDae.user_id,
+        user_id: bestMatch.userId,
         dae_id: bestMatch.id,
         handle: handleB,
       },
@@ -171,7 +156,7 @@ export async function POST(request: Request) {
           body: JSON.stringify({
             matchId,
             userAId: user.id,
-            userBId: matchedDae.user_id,
+            userBId: bestMatch.userId,
             handleA,
             handleB,
             daeAText: trimmed,

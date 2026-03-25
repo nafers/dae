@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server'
+import { fetchActiveBlockPairs, hasActiveBlockBetween } from '@/lib/blocks'
 import { fetchThreadUserStates, getThreadUserState } from '@/lib/thread-state'
 
 interface DaeRelation {
@@ -156,6 +157,7 @@ export async function fetchThreadDirectory({
 
   const groupedParticipants = new Map<string, ThreadParticipantRow[]>()
   const latestMessageByMatch = new Map<string, MessageRow>()
+  const messagesByMatch = new Map<string, MessageRow[]>()
 
   for (const participant of (participantRows ?? []) as ThreadParticipantRow[]) {
     const current = groupedParticipants.get(participant.match_id) ?? []
@@ -163,10 +165,21 @@ export async function fetchThreadDirectory({
     groupedParticipants.set(participant.match_id, current)
   }
 
+  const participantUserIds = currentUserId.startsWith('__')
+    ? []
+    : [...new Set(((participantRows ?? []) as ThreadParticipantRow[]).map((participant) => participant.user_id))]
+  const activeBlockPairs = currentUserId.startsWith('__')
+    ? new Set<string>()
+    : await fetchActiveBlockPairs([currentUserId, ...participantUserIds])
+
   for (const message of (messageRows ?? []) as MessageRow[]) {
     if (!latestMessageByMatch.has(message.match_id)) {
       latestMessageByMatch.set(message.match_id, message)
     }
+
+    const currentMessages = messagesByMatch.get(message.match_id) ?? []
+    currentMessages.push(message)
+    messagesByMatch.set(message.match_id, currentMessages)
   }
 
   const currentUserStateMap = includeState
@@ -179,6 +192,17 @@ export async function fetchThreadDirectory({
   const mappedThreads = matchIds.map((matchId) => {
       const participants = groupedParticipants.get(matchId) ?? []
       if (participants.length === 0) {
+        return null
+      }
+
+      if (
+        activeBlockPairs.size > 0 &&
+        participants.some(
+          (participant) =>
+            participant.user_id !== currentUserId &&
+            hasActiveBlockBetween(activeBlockPairs, currentUserId, participant.user_id)
+        )
+      ) {
         return null
       }
 
@@ -195,16 +219,16 @@ export async function fetchThreadDirectory({
           .sort((a, b) => a.handle.localeCompare(b.handle)),
       ]
       const latestMessage = latestMessageByMatch.get(matchId)
+      const threadMessages = messagesByMatch.get(matchId) ?? []
       const state = getThreadUserState(currentUserStateMap, currentUserId, matchId)
-      const hasUnread =
-        includeState &&
-        Boolean(
-          latestMessage &&
-            latestMessage.sender_id !== currentUserId &&
-            (!state.lastSeenAt ||
-              new Date(latestMessage.created_at).getTime() > new Date(state.lastSeenAt).getTime())
-        )
-      const unreadCount = hasUnread ? 1 : 0
+      const unreadCount = includeState
+        ? threadMessages.filter(
+            (message) =>
+              message.sender_id !== currentUserId &&
+              (!state.lastSeenAt || new Date(message.created_at).getTime() > new Date(state.lastSeenAt).getTime())
+          ).length
+        : 0
+      const hasUnread = unreadCount > 0
       const messageSender = latestMessage
         ? orderedParticipants.find((participant) => participant.user_id === latestMessage.sender_id)
         : null
