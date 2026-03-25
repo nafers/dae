@@ -13,6 +13,7 @@ interface Props {
   availableDaes: WaitingDaeOption[]
   defaultDaeId?: string
   initialRequestedDaeIds?: string[]
+  joinLocked?: boolean
 }
 
 export default function JoinThreadControl({
@@ -20,6 +21,7 @@ export default function JoinThreadControl({
   availableDaes,
   defaultDaeId,
   initialRequestedDaeIds = [],
+  joinLocked = false,
 }: Props) {
   const router = useRouter()
   const [selectedDaeId, setSelectedDaeId] = useState(defaultDaeId ?? availableDaes[0]?.id ?? '')
@@ -35,7 +37,7 @@ export default function JoinThreadControl({
   }, [availableDaes, defaultDaeId, initialRequestedDaeIds])
 
   async function requestJoin() {
-    if (!selectedDaeId || requesting || requested) return
+    if (!selectedDaeId || requesting || requested || joinLocked) return
 
     setRequesting(true)
     setError('')
@@ -97,17 +99,29 @@ export default function JoinThreadControl({
         <button
           type="button"
           onClick={() => void requestJoin()}
-          disabled={!selectedDaeId || requesting || requested}
+          disabled={!selectedDaeId || requesting || requested || joinLocked}
           className={`rounded-full px-4 py-2 text-sm font-medium transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
-            requested
+            joinLocked
+              ? 'border border-[var(--dae-line)] bg-[var(--dae-surface)] text-[var(--dae-muted)]'
+              : requested
               ? 'border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)] text-[var(--dae-accent-cool)]'
               : 'bg-[var(--dae-accent-rose)] text-white hover:opacity-95'
           }`}
         >
-          {requesting ? 'Requesting...' : requested ? 'Requested' : 'Request to join'}
+          {joinLocked
+            ? 'Joins paused'
+            : requesting
+              ? 'Requesting...'
+              : requested
+                ? 'Requested'
+                : 'Request to join'}
         </button>
         <p className="text-xs text-[var(--dae-muted)]">
-          {requested ? 'Waiting for someone in the room to approve.' : 'Send your waiting DAE into review for this room.'}
+          {joinLocked
+            ? 'A founder paused new joins for this room.'
+            : requested
+              ? 'Waiting for someone in the room to approve.'
+              : 'Send your waiting DAE into review for this room.'}
         </p>
       </div>
 

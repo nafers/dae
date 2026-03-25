@@ -5,6 +5,7 @@ import JoinThreadControl from '@/components/JoinThreadControl'
 import ThreadOverviewCard from '@/components/ThreadOverviewCard'
 import WaitingDaesList from '@/components/WaitingDaesList'
 import { fetchJoinRequestStatesForUser } from '@/lib/thread-join-requests'
+import { getRoomModerationState, fetchRoomModerationStates } from '@/lib/moderation-state'
 import { getRequestUser } from '@/lib/request-user'
 import { scoreThreadAttachmentFit } from '@/lib/thread-fit'
 import { createAdminClient } from '@/lib/supabase/server'
@@ -22,6 +23,8 @@ interface Props {
   searchParams: Promise<{
     topic?: string | string[]
     invite?: string | string[]
+    daeId?: string | string[]
+    matchId?: string | string[]
   }>
 }
 
@@ -44,9 +47,11 @@ function getFitTone(score: number) {
 }
 
 export default async function ReviewPage({ searchParams }: Props) {
-  const { topic, invite } = await searchParams
+  const { topic, invite, daeId, matchId } = await searchParams
   const focusedTopic = Array.isArray(topic) ? topic[0] ?? '' : topic ?? ''
   const inviteMatchId = Array.isArray(invite) ? invite[0] ?? '' : invite ?? ''
+  const focusedDaeId = Array.isArray(daeId) ? daeId[0] ?? '' : daeId ?? ''
+  const focusedMatchId = Array.isArray(matchId) ? matchId[0] ?? '' : matchId ?? ''
   const user = await getRequestUser()
 
   if (!user) redirect('/')
@@ -87,13 +92,23 @@ export default async function ReviewPage({ searchParams }: Props) {
       .filter((request) => request.state === 'requested')
       .map((request) => `${request.matchId}:${request.daeId}`)
   )
-  const invitedThread = invitedThreads[0]
+  const roomStates = await fetchRoomModerationStates([
+    ...discoverThreads.map((thread) => thread.matchId),
+    ...invitedThreads.map((thread) => thread.matchId),
+  ])
+  const discoverableThreads = discoverThreads.filter(
+    (thread) => !getRoomModerationState(roomStates, thread.matchId).hidden
+  )
+  const invitedThread = invitedThreads.find(
+    (thread) => !getRoomModerationState(roomStates, thread.matchId).hidden
+  )
   const suggestionGroups = typedWaitingDaes.map((dae) => ({
     dae,
     focusScore: focusedTopic ? scoreTextPair(focusedTopic, dae.text) : 0,
-    suggestions: discoverThreads
+    suggestions: discoverableThreads
       .map((thread) => ({
         thread,
+        moderation: getRoomModerationState(roomStates, thread.matchId),
         fit: scoreThreadAttachmentFit({
           daeText: dae.text,
           daeEmbedding: dae.embedding,
@@ -111,16 +126,22 @@ export default async function ReviewPage({ searchParams }: Props) {
       }))
       .map((entry) => ({
         ...entry,
-        weightedScore: entry.fit.score + entry.focusScore * 0.14,
+        weightedScore:
+          entry.fit.score +
+          entry.focusScore * 0.14 +
+          (focusedMatchId && entry.thread.matchId === focusedMatchId ? 0.18 : 0),
       }))
       .filter((entry) => entry.weightedScore >= 0.34)
       .sort((a, b) => b.weightedScore - a.weightedScore)
       .slice(0, 3),
   }))
     .sort((a, b) =>
-      focusedTopic
-        ? b.focusScore + (b.suggestions[0]?.weightedScore ?? 0) - (a.focusScore + (a.suggestions[0]?.weightedScore ?? 0))
-        : new Date(b.dae.created_at).getTime() - new Date(a.dae.created_at).getTime()
+      focusedDaeId
+        ? (b.dae.id === focusedDaeId ? 1 : 0) - (a.dae.id === focusedDaeId ? 1 : 0) ||
+          new Date(b.dae.created_at).getTime() - new Date(a.dae.created_at).getTime()
+        : focusedTopic
+          ? b.focusScore + (b.suggestions[0]?.weightedScore ?? 0) - (a.focusScore + (a.suggestions[0]?.weightedScore ?? 0))
+          : new Date(b.dae.created_at).getTime() - new Date(a.dae.created_at).getTime()
     )
 
   return (
@@ -182,10 +203,32 @@ export default async function ReviewPage({ searchParams }: Props) {
                         initialRequestedDaeIds={typedWaitingDaes
                           .filter((dae) => pendingRequestKeys.has(`${invitedThread.matchId}:${dae.id}`))
                           .map((dae) => dae.id)}
+                        joinLocked={getRoomModerationState(roomStates, invitedThread.matchId).joinLocked}
                       />
                     ) : undefined
                   }
                 />
+              </div>
+            </section>
+          ) : null}
+
+          {focusedDaeId || focusedMatchId ? (
+            <section className="rounded-[24px] border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)]/70 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent-cool)]">
+                    Near-match spotlight
+                  </p>
+                  <p className="mt-1 text-sm text-[var(--dae-ink)]">
+                    We pulled the closest rooms higher because this prompt looks almost there.
+                  </p>
+                </div>
+                <Link
+                  href="/review"
+                  className="rounded-full border border-[var(--dae-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
+                >
+                  Clear
+                </Link>
               </div>
             </section>
           ) : null}
@@ -237,41 +280,64 @@ export default async function ReviewPage({ searchParams }: Props) {
                   </div>
                 ) : (
                   <div className="mt-4 grid gap-3">
-                    {suggestions.map(({ thread, fit }) => {
+                    {suggestions.map(({ thread, fit, moderation }) => {
                       const tone = getFitTone(fit.score)
                       const isBestFit = suggestions[0]?.thread.matchId === thread.matchId
+                      const isSpotlight = Boolean(
+                        (focusedDaeId && dae.id === focusedDaeId) ||
+                          (focusedMatchId && thread.matchId === focusedMatchId)
+                      )
 
                       return (
-                        <ThreadOverviewCard
+                        <div
                           key={`${dae.id}-${thread.matchId}`}
-                          thread={thread}
-                          showLatestActivity={false}
-                          primaryAction={
-                            <JoinThreadControl
-                              matchId={thread.matchId}
-                              availableDaes={[{ id: dae.id, text: dae.text }]}
-                              defaultDaeId={dae.id}
-                              initialRequestedDaeIds={
-                                pendingRequestKeys.has(`${thread.matchId}:${dae.id}`) ? [dae.id] : []
-                              }
-                            />
+                          className={
+                            isSpotlight
+                              ? 'rounded-[30px] border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)]/30 p-1.5'
+                              : ''
                           }
-                          secondaryAction={
-                            <div className="flex flex-wrap items-center gap-2">
-                              {isBestFit ? (
-                                <span className="rounded-full bg-[var(--dae-accent-cool-soft)] px-3 py-1 text-xs font-medium text-[var(--dae-accent-cool)]">
-                                  Best fit
+                        >
+                          <ThreadOverviewCard
+                            thread={thread}
+                            showLatestActivity={false}
+                            primaryAction={
+                              <JoinThreadControl
+                                matchId={thread.matchId}
+                                availableDaes={[{ id: dae.id, text: dae.text }]}
+                                defaultDaeId={dae.id}
+                                initialRequestedDaeIds={
+                                  pendingRequestKeys.has(`${thread.matchId}:${dae.id}`) ? [dae.id] : []
+                                }
+                                joinLocked={moderation.joinLocked}
+                              />
+                            }
+                            secondaryAction={
+                              <div className="flex flex-wrap items-center gap-2">
+                                {isBestFit ? (
+                                  <span className="rounded-full bg-[var(--dae-accent-cool-soft)] px-3 py-1 text-xs font-medium text-[var(--dae-accent-cool)]">
+                                    Best fit
+                                  </span>
+                                ) : null}
+                                {isSpotlight ? (
+                                  <span className="rounded-full bg-[var(--dae-accent-soft)] px-3 py-1 text-xs font-medium text-[var(--dae-accent)]">
+                                    Spotlight
+                                  </span>
+                                ) : null}
+                                {moderation.joinLocked ? (
+                                  <span className="rounded-full bg-[var(--dae-surface)] px-3 py-1 text-xs font-medium text-[var(--dae-muted)]">
+                                    Joins paused
+                                  </span>
+                                ) : null}
+                                <span
+                                  className={`rounded-full px-3 py-1 text-xs font-medium ${tone.className}`}
+                                >
+                                  {fit.confidenceLabel} / {Math.round(fit.score * 100)}%
                                 </span>
-                              ) : null}
-                              <span
-                                className={`rounded-full px-3 py-1 text-xs font-medium ${tone.className}`}
-                              >
-                                {fit.confidenceLabel} / {Math.round(fit.score * 100)}%
-                              </span>
-                              <span className="text-xs text-[var(--dae-muted)]">{fit.reason}</span>
-                            </div>
-                          }
-                        />
+                                <span className="text-xs text-[var(--dae-muted)]">{fit.reason}</span>
+                              </div>
+                            }
+                          />
+                        </div>
                       )
                     })}
                   </div>

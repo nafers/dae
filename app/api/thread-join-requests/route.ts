@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { fetchBlockedUserIdsForUser } from '@/lib/blocks'
 import { generateHandle } from '@/lib/handles'
 import { trackAnalyticsEvents } from '@/lib/analytics'
+import { fetchRoomModerationStates, getRoomModerationState } from '@/lib/moderation-state'
 import { fetchPendingJoinRequestsForMatch } from '@/lib/thread-join-requests'
 import { getRequestUser } from '@/lib/request-user'
 import { createAdminClient } from '@/lib/supabase/server'
@@ -61,12 +62,21 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient()
+    const roomState = getRoomModerationState(await fetchRoomModerationStates([matchId]), matchId)
 
     if (action === 'request') {
       const daeId = typeof payload?.daeId === 'string' ? payload.daeId : ''
 
       if (!daeId) {
         return NextResponse.json({ error: 'Missing daeId' }, { status: 400 })
+      }
+
+      if (roomState.hidden) {
+        return NextResponse.json({ error: 'That room is no longer open for discovery' }, { status: 400 })
+      }
+
+      if (roomState.joinLocked) {
+        return NextResponse.json({ error: 'New joins are paused for this room' }, { status: 400 })
       }
 
       const blockedUserIds = await fetchBlockedUserIdsForUser(user.id)
@@ -197,6 +207,10 @@ export async function POST(request: Request) {
 
     if (action !== 'approve') {
       return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
+    }
+
+    if (roomState.hidden || roomState.joinLocked) {
+      return NextResponse.json({ error: 'This room is not accepting new people right now' }, { status: 400 })
     }
 
     const approverBlockedUserIds = await fetchBlockedUserIdsForUser(user.id)

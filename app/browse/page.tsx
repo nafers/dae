@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import AppShell from '@/components/AppShell'
 import BrowseTopics from '@/components/BrowseTopics'
@@ -45,6 +46,14 @@ export default async function BrowsePage({ searchParams }: Props) {
         (waitingCount ?? 0) > 0
           ? `Search ideas. ${followedTopics.size} following. Review to attach yours.`
           : `Search the pool. ${followedTopics.size} following.`
+      }
+      actions={
+        <Link
+          href="/topics"
+          className="rounded-full border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] shadow-sm hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
+        >
+          Topics
+        </Link>
       }
     >
       {browseTopics.length === 0 ? (

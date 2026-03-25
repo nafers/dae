@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { trackAnalyticsEvent } from '@/lib/analytics'
 import { fetchBlockedUserIdsForUser } from '@/lib/blocks'
 import { generateHandle } from '@/lib/handles'
+import { fetchRoomModerationStates, getRoomModerationState } from '@/lib/moderation-state'
 import { getRequestUser } from '@/lib/request-user'
 import { createAdminClient } from '@/lib/supabase/server'
 
@@ -20,6 +21,15 @@ export async function POST(request: Request) {
     const user = await getRequestUser()
     if (!user) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
+    const roomState = getRoomModerationState(await fetchRoomModerationStates([matchId]), matchId)
+
+    if (roomState.hidden) {
+      return NextResponse.json({ error: 'That room is no longer open for discovery' }, { status: 400 })
+    }
+
+    if (roomState.joinLocked) {
+      return NextResponse.json({ error: 'New joins are paused for this room' }, { status: 400 })
     }
 
     const admin = createAdminClient()

@@ -6,6 +6,7 @@ import ShareButton from '@/components/ShareButton'
 import ThreadOverviewCard from '@/components/ThreadOverviewCard'
 import TopicSignalBar from '@/components/TopicSignalBar'
 import { fetchTopicHubData, fetchTopicByKey } from '@/lib/topic-hubs'
+import { fetchRelatedTopics } from '@/lib/topic-registry'
 import { fetchTopicSignalSummaries } from '@/lib/quality-signals'
 import { getRequestUser } from '@/lib/request-user'
 import { createAdminClient } from '@/lib/supabase/server'
@@ -35,7 +36,7 @@ export default async function TopicHubPage({ params }: Props) {
     notFound()
   }
 
-  const [{ waitingPrompts, relatedRooms }, signalMap, followedTopics, waitingCount] = await Promise.all([
+  const [{ waitingPrompts, relatedRooms }, signalMap, followedTopics, waitingCount, relatedTopics] = await Promise.all([
     fetchTopicHubData({
       topic,
       currentUserId: user?.id ?? null,
@@ -53,6 +54,7 @@ export default async function TopicHubPage({ params }: Props) {
           .eq('status', 'unmatched')
           .then((result) => result.count ?? 0)
       : Promise.resolve(0),
+    fetchRelatedTopics(topic.topicKey, 4),
   ])
 
   const signalSummary = signalMap.get(topic.topicKey)
@@ -89,10 +91,16 @@ export default async function TopicHubPage({ params }: Props) {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              <Link
-                href={user ? `/submit?draft=${encodeURIComponent(topic.headline)}` : `/?next=${encodeURIComponent(`/submit?draft=${topic.searchQuery}`)}`}
-                className="rounded-full border border-[var(--dae-accent)] bg-[var(--dae-accent-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent)] hover:opacity-95"
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/topics"
+              className="rounded-full border border-[var(--dae-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-ink)] hover:border-[var(--dae-muted)]"
+            >
+              All topics
+            </Link>
+            <Link
+              href={user ? `/submit?draft=${encodeURIComponent(topic.headline)}` : `/?next=${encodeURIComponent(`/submit?draft=${topic.searchQuery}`)}`}
+              className="rounded-full border border-[var(--dae-accent)] bg-[var(--dae-accent-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent)] hover:opacity-95"
               >
                 Start from this
               </Link>
@@ -208,6 +216,37 @@ export default async function TopicHubPage({ params }: Props) {
 
           <div className="space-y-4">
             <div className="rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-5 shadow-[0_14px_36px_rgba(32,26,22,0.05)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--dae-accent-rose)]">
+                Nearby topics
+              </p>
+              <p className="mt-1 text-sm text-[var(--dae-muted)]">
+                Other hubs that feel close to the same underlying idea.
+              </p>
+
+              <div className="mt-4 space-y-2">
+                {relatedTopics.length === 0 ? (
+                  <div className="rounded-2xl bg-[var(--dae-surface)] px-4 py-4 text-sm text-[var(--dae-muted)]">
+                    Nothing nearby yet.
+                  </div>
+                ) : (
+                  relatedTopics.map((relatedTopic) => (
+                    <Link
+                      key={relatedTopic.topicKey}
+                      href={`/topics/${encodeURIComponent(relatedTopic.topicKey)}`}
+                      className="block rounded-2xl bg-[var(--dae-surface)] px-4 py-3 transition-colors hover:bg-white"
+                    >
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent-rose)]">
+                        {relatedTopic.label}
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-[var(--dae-ink)]">{relatedTopic.headline}</p>
+                      <p className="mt-1 text-xs leading-5 text-[var(--dae-muted)]">{relatedTopic.summary}</p>
+                    </Link>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-5 shadow-[0_14px_36px_rgba(32,26,22,0.05)]">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--dae-accent-warm)]">
                 Waiting prompts
               </p>
@@ -256,6 +295,33 @@ export default async function TopicHubPage({ params }: Props) {
                 </Link>
               </div>
             </div>
+
+            {!user ? (
+              <div className="rounded-[28px] border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)]/70 p-5 shadow-[0_14px_36px_rgba(32,26,22,0.05)]">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--dae-accent-cool)]">
+                  New here?
+                </p>
+                <div className="mt-3 space-y-2 text-sm leading-6 text-[var(--dae-muted)]">
+                  <p>1. Sign in once.</p>
+                  <p>2. Write the version of this idea that sounds most like you.</p>
+                  <p>3. DAE will either match you automatically or tee up the closest rooms to rescue into.</p>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Link
+                    href={`/?next=${encodeURIComponent(`/submit?draft=${topic.searchQuery}`)}`}
+                    className="rounded-full border border-[var(--dae-accent)] bg-[var(--dae-accent-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent)] hover:opacity-95"
+                  >
+                    Add your DAE
+                  </Link>
+                  <Link
+                    href={`/?next=${encodeURIComponent(`/topics/${topic.topicKey}`)}`}
+                    className="rounded-full border border-[var(--dae-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-ink)] hover:border-[var(--dae-muted)]"
+                  >
+                    Sign in first
+                  </Link>
+                </div>
+              </div>
+            ) : null}
           </div>
         </section>
       </div>

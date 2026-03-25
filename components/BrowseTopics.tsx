@@ -192,6 +192,12 @@ export default function BrowseTopics({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href="/topics"
+                className="rounded-full border border-[var(--dae-line)] bg-white px-3 py-1.5 text-sm font-medium text-[var(--dae-ink)] hover:border-[var(--dae-muted)]"
+              >
+                Open hubs
+              </Link>
               {sortOptions.map((option) => {
                 const isActive = option.key === sort
 

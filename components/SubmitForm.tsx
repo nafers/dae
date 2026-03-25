@@ -3,9 +3,17 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import type { NearRoomMatch, NearTopicMatch } from '@/lib/near-matches'
 
 interface Props {
   initialText?: string
+  initialInviteMatchId?: string
+}
+
+interface WaitingResult {
+  daeId: string
+  nearRooms: NearRoomMatch[]
+  nearTopics: NearTopicMatch[]
 }
 
 const starterPrompts = [
@@ -52,10 +60,11 @@ function getPromptTips(rawText: string) {
   return tips.slice(0, 2)
 }
 
-export default function SubmitForm({ initialText = '' }: Props) {
+export default function SubmitForm({ initialText = '', initialInviteMatchId = '' }: Props) {
   const [text, setText] = useState(initialText)
   const [loading, setLoading] = useState(false)
   const [status, setStatus] = useState<'idle' | 'waiting' | 'error'>('idle')
+  const [waitingResult, setWaitingResult] = useState<WaitingResult | null>(null)
   const [error, setError] = useState('')
   const router = useRouter()
 
@@ -69,6 +78,7 @@ export default function SubmitForm({ initialText = '' }: Props) {
     setText(initialText)
     setError('')
     setStatus('idle')
+    setWaitingResult(null)
   }, [initialText])
 
   async function handleSubmit(event: React.FormEvent) {
@@ -95,6 +105,11 @@ export default function SubmitForm({ initialText = '' }: Props) {
         return
       } else {
         setStatus('waiting')
+        setWaitingResult({
+          daeId: typeof data?.daeId === 'string' ? data.daeId : '',
+          nearRooms: Array.isArray(data?.nearRooms) ? (data.nearRooms as NearRoomMatch[]) : [],
+          nearTopics: Array.isArray(data?.nearTopics) ? (data.nearTopics as NearTopicMatch[]) : [],
+        })
       }
     } catch {
       setError('Network error. Please try again.')
@@ -123,6 +138,79 @@ export default function SubmitForm({ initialText = '' }: Props) {
           <p className="text-sm leading-6 text-[var(--dae-ink)]">{normalizedText}</p>
         </div>
 
+        {waitingResult && (waitingResult.nearRooms.length > 0 || waitingResult.nearTopics.length > 0 || initialInviteMatchId) ? (
+          <div className="space-y-3 rounded-2xl bg-white/80 px-4 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent-cool)]">
+                  Almost there
+                </p>
+                <p className="mt-1 text-sm text-[var(--dae-muted)]">
+                  These look close enough to rescue instead of just waiting.
+                </p>
+              </div>
+              <Link
+                href={
+                  waitingResult.daeId && initialInviteMatchId
+                    ? `/review?daeId=${encodeURIComponent(waitingResult.daeId)}&matchId=${encodeURIComponent(initialInviteMatchId)}`
+                    : '/review'
+                }
+                className="rounded-full border border-[var(--dae-accent-warm)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-accent-warm)] hover:bg-[var(--dae-accent-warm-soft)]"
+              >
+                Review all
+              </Link>
+            </div>
+
+            {waitingResult.nearRooms.length > 0 ? (
+              <div className="space-y-2">
+                {waitingResult.nearRooms.map((room) => (
+                  <div
+                    key={room.matchId}
+                    className="rounded-2xl border border-[var(--dae-line)] bg-white px-4 py-3"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent-cool)]">
+                          {room.topicLabel}
+                        </p>
+                        <p className="mt-1 text-sm font-medium text-[var(--dae-ink)]">{room.headline}</p>
+                      </div>
+                      <span className="rounded-full bg-[var(--dae-accent-cool-soft)] px-3 py-1 text-xs font-medium text-[var(--dae-accent-cool)]">
+                        {room.matchPercent}%
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs text-[var(--dae-muted)]">
+                      {room.reason} • {room.participantCount} people
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Link
+                        href={`/review?daeId=${encodeURIComponent(waitingResult.daeId)}&matchId=${encodeURIComponent(room.matchId)}`}
+                        className="rounded-full border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)] px-3 py-1.5 text-xs font-medium text-[var(--dae-accent-cool)] hover:opacity-95"
+                      >
+                        Check this room
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+
+            {waitingResult.nearTopics.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {waitingResult.nearTopics.map((topic) => (
+                  <Link
+                    key={topic.topicKey}
+                    href={`/topics/${encodeURIComponent(topic.topicKey)}`}
+                    className="rounded-full border border-[var(--dae-line)] bg-[var(--dae-surface)] px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] hover:border-[var(--dae-accent-rose)] hover:text-[var(--dae-accent-rose)]"
+                  >
+                    {topic.label} {topic.matchPercent}%
+                  </Link>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -130,6 +218,7 @@ export default function SubmitForm({ initialText = '' }: Props) {
               setText('')
               setError('')
               setStatus('idle')
+              setWaitingResult(null)
             }}
             className="rounded-full border border-[var(--dae-accent)] bg-[var(--dae-accent-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent)] hover:opacity-95"
           >
@@ -146,6 +235,12 @@ export default function SubmitForm({ initialText = '' }: Props) {
             className="rounded-full border border-[var(--dae-accent-rose)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-accent-rose)] hover:bg-[var(--dae-accent-rose-soft)]"
           >
             Browse
+          </Link>
+          <Link
+            href="/topics"
+            className="rounded-full border border-[var(--dae-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-ink)] hover:border-[var(--dae-muted)]"
+          >
+            Topics
           </Link>
           <Link
             href="/threads"
@@ -221,6 +316,17 @@ export default function SubmitForm({ initialText = '' }: Props) {
               ))}
             </div>
           </div>
+
+          {initialInviteMatchId ? (
+            <div className="rounded-2xl bg-[var(--dae-accent-cool-soft)]/70 px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent-cool)]">
+                Invite handoff
+              </p>
+              <p className="mt-2 text-xs leading-5 text-[var(--dae-muted)]">
+                If this feels close to the room you were invited to, post it and we will tee up the rescue path.
+              </p>
+            </div>
+          ) : null}
         </div>
       </div>
 

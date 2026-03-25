@@ -89,7 +89,10 @@ export default function ChatThread({
   )
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [sendError, setSendError] = useState('')
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const scrollerRef = useRef<HTMLDivElement>(null)
+  const firstUnreadDividerRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const supabase = useRef(createClient()).current
   const refreshInFlightRef = useRef(false)
@@ -98,6 +101,8 @@ export default function ChatThread({
   const lastSeenAtRef = useRef(0)
   const lastSeenMarkerRef = useRef('')
   const messagesRef = useRef(initialMessages)
+  const hasPositionedInitialViewRef = useRef(false)
+  const isNearBottomRef = useRef(true)
 
   const participantMeta = participants.map((participant, index) => ({
     ...participant,
@@ -107,6 +112,21 @@ export default function ChatThread({
   const participantByUserId = new Map(
     participantMeta.map((participant) => [participant.userId, participant] as const)
   )
+  const unreadStartIndex = initialLastSeenAt
+    ? messages.findIndex(
+        (message) =>
+          message.sender_id !== myUserId &&
+          new Date(message.created_at).getTime() > new Date(initialLastSeenAt).getTime()
+      )
+    : -1
+  const unreadMessages =
+    unreadStartIndex >= 0
+      ? messages.filter(
+          (message, index) => index >= unreadStartIndex && message.sender_id !== myUserId
+        )
+      : []
+  const unreadParticipantCount = new Set(unreadMessages.map((message) => message.sender_id)).size
+  const hasUnreadSinceLastVisit = unreadMessages.length > 0
 
   function mergeMessages(nextMessages: Message[]) {
     setMessages((prev) => {
@@ -128,6 +148,29 @@ export default function ChatThread({
   useEffect(() => {
     messagesRef.current = messages
   }, [messages])
+
+  function syncScrollState() {
+    const scroller = scrollerRef.current
+    if (!scroller) {
+      return
+    }
+
+    const remaining = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight
+    const nearBottom = remaining < 96
+    isNearBottomRef.current = nearBottom
+    setShowJumpToLatest(!nearBottom)
+  }
+
+  function scrollToLatest(behavior: ScrollBehavior = 'smooth') {
+    bottomRef.current?.scrollIntoView({ behavior })
+  }
+
+  function scrollToUnread(behavior: ScrollBehavior = 'smooth') {
+    firstUnreadDividerRef.current?.scrollIntoView({
+      behavior,
+      block: 'center',
+    })
+  }
 
   const refreshMessages = useEffectEvent(async () => {
     if (refreshInFlightRef.current) return
@@ -317,8 +360,27 @@ export default function ChatThread({
   }, [markThreadSeen, matchId, myUserId, supabase])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    if (!hasPositionedInitialViewRef.current) {
+      hasPositionedInitialViewRef.current = true
+
+      if (hasUnreadSinceLastVisit) {
+        scrollToUnread('auto')
+      } else {
+        scrollToLatest('auto')
+      }
+
+      return
+    }
+
+    const newestMessage = messages[messages.length - 1]
+    if (!newestMessage) {
+      return
+    }
+
+    if (isNearBottomRef.current || newestMessage.sender_id === myUserId) {
+      scrollToLatest('smooth')
+    }
+  }, [hasUnreadSinceLastVisit, messages, myUserId])
 
   async function sendMessage(content: string) {
     setSendError('')
@@ -372,7 +434,7 @@ export default function ChatThread({
   }
 
   return (
-    <div className="flex min-h-[72vh] flex-col overflow-hidden rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] shadow-[0_18px_40px_rgba(32,26,22,0.06)]">
+    <div className="relative flex min-h-[72vh] flex-col overflow-hidden rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] shadow-[0_18px_40px_rgba(32,26,22,0.06)]">
       <div className="flex-shrink-0 border-b border-[var(--dae-line)] bg-[var(--dae-surface)] px-4 py-3">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
@@ -496,7 +558,29 @@ export default function ChatThread({
         </div>
       </div>
 
-      <div className="flex-1 space-y-3 overflow-y-auto px-4 py-4">
+      <div
+        ref={scrollerRef}
+        onScroll={syncScrollState}
+        className="flex-1 space-y-3 overflow-y-auto px-4 py-4"
+      >
+        {hasUnreadSinceLastVisit ? (
+          <div className="sticky top-0 z-10 -mt-1 mb-3 flex items-center justify-between gap-3 rounded-2xl border border-[var(--dae-accent-cool)] bg-[rgba(238,248,255,0.96)] px-3 py-2 backdrop-blur">
+            <p className="text-xs text-[var(--dae-ink)]">
+              <span className="font-semibold text-[var(--dae-accent-cool)]">
+                {unreadMessages.length} new
+              </span>{' '}
+              since you were away from {unreadParticipantCount} {unreadParticipantCount === 1 ? 'person' : 'people'}
+            </p>
+            <button
+              type="button"
+              onClick={() => scrollToUnread()}
+              className="rounded-full border border-[var(--dae-accent-cool)] bg-white px-3 py-1.5 text-[11px] font-medium text-[var(--dae-accent-cool)]"
+            >
+              Jump to unread
+            </button>
+          </div>
+        ) : null}
+
         {messages.length === 0 ? (
           <div className="py-8 text-center text-sm text-[var(--dae-muted)]">No messages yet.</div>
         ) : null}
@@ -536,7 +620,7 @@ export default function ChatThread({
                 )
 
           return (
-            <div key={message.id}>
+            <div key={message.id} id={`message-${message.id}`}>
               {showDateDivider ? (
                 <div className="my-4 flex items-center gap-3">
                   <div className="h-px flex-1 bg-[var(--dae-line)]" />
@@ -550,7 +634,7 @@ export default function ChatThread({
                 </div>
               ) : null}
               {showUnreadDivider ? (
-                <div className="my-4 flex items-center gap-3">
+                <div ref={firstUnreadDividerRef} className="my-4 flex items-center gap-3">
                   <div className="h-px flex-1 bg-[var(--dae-accent-cool)]/30" />
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent-cool)]">
                     New since you left
@@ -596,6 +680,18 @@ export default function ChatThread({
 
         <div ref={bottomRef} />
       </div>
+
+      {showJumpToLatest ? (
+        <div className="pointer-events-none absolute inset-x-0 bottom-24 flex justify-center px-4">
+          <button
+            type="button"
+            onClick={() => scrollToLatest()}
+            className="pointer-events-auto rounded-full border border-[var(--dae-accent-cool)] bg-white px-4 py-2 text-xs font-medium text-[var(--dae-accent-cool)] shadow-[0_12px_28px_rgba(32,26,22,0.14)]"
+          >
+            Jump to latest
+          </button>
+        </div>
+      ) : null}
 
       <MatchFeedbackPrompt matchId={matchId} initialFeedback={initialFeedback} />
       <ChatInput onSend={sendMessage} error={sendError} />

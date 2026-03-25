@@ -9,6 +9,7 @@ interface Props {
 }
 
 type QueueFilter = 'open' | 'reviewed'
+type ReasonFilter = 'all' | string
 
 function formatTimestamp(timestamp: string) {
   return new Date(timestamp).toLocaleString('en-US', {
@@ -23,10 +24,24 @@ export default function ModerationQueue({ initialItems }: Props) {
   const [items, setItems] = useState(initialItems)
   const [filter, setFilter] = useState<QueueFilter>('open')
   const [busyKey, setBusyKey] = useState('')
+  const [roomBusyKey, setRoomBusyKey] = useState('')
+  const [reasonFilter, setReasonFilter] = useState<ReasonFilter>('all')
+  const reasonOptions = ['all', ...new Set(items.map((item) => item.reason))]
 
   const visibleItems = useMemo(
-    () => items.filter((item) => (filter === 'open' ? !item.reviewedAt : Boolean(item.reviewedAt))),
-    [filter, items]
+    () =>
+      items.filter((item) => {
+        if (filter === 'open' ? item.reviewedAt : !item.reviewedAt) {
+          return false
+        }
+
+        if (reasonFilter !== 'all' && item.reason !== reasonFilter) {
+          return false
+        }
+
+        return true
+      }),
+    [filter, items, reasonFilter]
   )
 
   async function reviewReport(reportKey: string, matchId: string | null, decision: 'reviewed' | 'watch' | 'follow_up') {
@@ -69,6 +84,46 @@ export default function ModerationQueue({ initialItems }: Props) {
     }
   }
 
+  async function updateRoom(matchId: string, roomAction: 'hide_room' | 'restore_room' | 'lock_joins' | 'unlock_joins') {
+    if (roomBusyKey) {
+      return
+    }
+
+    setRoomBusyKey(matchId)
+
+    try {
+      const response = await fetch('/api/moderation/review', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          matchId,
+          roomAction,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Unable to update this room.')
+      }
+
+      setItems((current) =>
+        current.map((item) =>
+          item.matchId === matchId
+            ? {
+                ...item,
+                roomHidden: roomAction === 'hide_room' ? true : roomAction === 'restore_room' ? false : item.roomHidden,
+                joinLocked:
+                  roomAction === 'lock_joins' ? true : roomAction === 'unlock_joins' ? false : item.joinLocked,
+              }
+            : item
+        )
+      )
+    } finally {
+      setRoomBusyKey('')
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-2">
@@ -90,6 +145,27 @@ export default function ModerationQueue({ initialItems }: Props) {
               }`}
             >
               {option.label}
+            </button>
+          )
+        })}
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {reasonOptions.map((reason) => {
+          const isActive = reason === reasonFilter
+
+          return (
+            <button
+              key={reason}
+              type="button"
+              onClick={() => setReasonFilter(reason)}
+              className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-all ${
+                isActive
+                  ? 'border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] text-[var(--dae-accent-warm)]'
+                  : 'border-[var(--dae-line)] bg-white text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]'
+              }`}
+            >
+              {reason === 'all' ? 'All reasons' : reason}
             </button>
           )
         })}
@@ -120,10 +196,23 @@ export default function ModerationQueue({ initialItems }: Props) {
                         {item.decision.replace('_', ' ')}
                       </span>
                     ) : null}
+                    {item.roomHidden ? (
+                      <span className="rounded-full bg-[var(--dae-accent-rose-soft)] px-3 py-1 text-xs font-medium text-[var(--dae-accent-rose)]">
+                        Hidden from discovery
+                      </span>
+                    ) : null}
+                    {item.joinLocked ? (
+                      <span className="rounded-full bg-[var(--dae-surface)] px-3 py-1 text-xs font-medium text-[var(--dae-muted)]">
+                        Joins paused
+                      </span>
+                    ) : null}
                   </div>
                   <p className="mt-3 text-sm text-[var(--dae-muted)]">
                     Reported {formatTimestamp(item.createdAt)}
                     {item.reporterId ? ` by user ${item.reporterId.slice(0, 8)}` : ''}
+                  </p>
+                  <p className="mt-1 text-xs text-[var(--dae-muted)]">
+                    {item.roomReportCount} report{item.roomReportCount === 1 ? '' : 's'} on this room
                   </p>
                   {item.room ? (
                     <div className="mt-3 rounded-[24px] bg-[var(--dae-surface)] px-4 py-4">
@@ -148,6 +237,26 @@ export default function ModerationQueue({ initialItems }: Props) {
                     >
                       Open room
                     </Link>
+                  ) : null}
+                  {item.matchId ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void updateRoom(item.matchId!, item.roomHidden ? 'restore_room' : 'hide_room')}
+                        disabled={roomBusyKey === item.matchId}
+                        className="rounded-full border border-[var(--dae-accent-rose)] bg-[var(--dae-accent-rose-soft)] px-3 py-1.5 text-xs font-medium text-[var(--dae-accent-rose)] disabled:opacity-60"
+                      >
+                        {item.roomHidden ? 'Restore room' : 'Hide room'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void updateRoom(item.matchId!, item.joinLocked ? 'unlock_joins' : 'lock_joins')}
+                        disabled={roomBusyKey === item.matchId}
+                        className="rounded-full border border-[var(--dae-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] disabled:opacity-60"
+                      >
+                        {item.joinLocked ? 'Unlock joins' : 'Lock joins'}
+                      </button>
+                    </>
                   ) : null}
                   {!item.reviewedAt ? (
                     <>

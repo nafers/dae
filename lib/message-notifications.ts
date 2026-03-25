@@ -18,11 +18,17 @@ interface NotificationTarget {
   email: string
 }
 
+interface MessageStateRow {
+  sender_id: string
+  created_at: string
+}
+
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null
 const NOTIFICATION_FROM = 'Hey DAE <hello@heydae.app>'
 const NOTIFICATION_SUBJECT = 'New reply in DAE'
-const ACTIVE_RECENCY_WINDOW_MS = 1000 * 60 * 4
-const NOTIFICATION_COOLDOWN_MS = 1000 * 60 * 15
+const ACTIVE_RECENCY_WINDOW_MS = 1000 * 60 * 2
+const SOFT_GRACE_WINDOW_MS = 1000 * 60 * 12
+const NOTIFICATION_COOLDOWN_MS = 1000 * 60 * 12
 
 function getDaeText(relation: ThreadParticipantRow['daes']) {
   if (Array.isArray(relation)) {
@@ -108,6 +114,19 @@ export async function sendThreadMessageNotifications({
       userIds: recipientTargets.map((target) => target.userId),
       matchIds: [matchId],
     })
+    const lastSeenValues = recipientTargets
+      .map((target) => getThreadUserState(stateMap, target.userId, matchId).lastSeenAt)
+      .filter((value): value is string => Boolean(value))
+      .sort((a, b) => new Date(a).getTime() - new Date(b).getTime())
+    const oldestRelevantSeenAt =
+      lastSeenValues[0] ?? new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString()
+    const { data: recentMessages } = await admin
+      .from('messages')
+      .select('sender_id, created_at')
+      .eq('match_id', matchId)
+      .gt('created_at', oldestRelevantSeenAt)
+      .order('created_at', { ascending: false })
+      .limit(200)
     const latestNotificationByUser = new Map<string, string>()
 
     for (const event of recentNotificationEvents ?? []) {
@@ -161,8 +180,21 @@ export async function sendThreadMessageNotifications({
 
       const state = getThreadUserState(stateMap, target.userId, matchId)
       const cooldownTimestamp = latestNotificationByUser.get(target.userId) ?? null
+      const unreadCount = ((recentMessages ?? []) as MessageStateRow[]).filter(
+        (message) =>
+          message.sender_id !== target.userId &&
+          (!state.lastSeenAt || new Date(message.created_at).getTime() > new Date(state.lastSeenAt).getTime())
+      ).length
+      const shouldWaitForMore =
+        unreadCount <= 1 && Boolean(state.lastSeenAt) && isRecent(state.lastSeenAt, SOFT_GRACE_WINDOW_MS)
 
-      if (state.hidden || state.muted || isRecent(state.lastSeenAt, ACTIVE_RECENCY_WINDOW_MS) || isRecent(cooldownTimestamp, NOTIFICATION_COOLDOWN_MS)) {
+      if (
+        state.hidden ||
+        state.muted ||
+        isRecent(state.lastSeenAt, ACTIVE_RECENCY_WINDOW_MS) ||
+        isRecent(cooldownTimestamp, NOTIFICATION_COOLDOWN_MS) ||
+        shouldWaitForMore
+      ) {
         analyticsEvents.push({
           eventName: 'message_email_skipped',
           userId: target.userId,
@@ -175,7 +207,10 @@ export async function sendThreadMessageNotifications({
                 ? 'muted'
                 : isRecent(state.lastSeenAt, ACTIVE_RECENCY_WINDOW_MS)
                   ? 'active_recently'
-                  : 'cooldown',
+                  : isRecent(cooldownTimestamp, NOTIFICATION_COOLDOWN_MS)
+                    ? 'cooldown'
+                    : 'waiting_for_more',
+            unreadCount,
           },
         })
         continue
@@ -188,12 +223,16 @@ export async function sendThreadMessageNotifications({
         await resend.emails.send({
           from: NOTIFICATION_FROM,
           to: target.email,
-          subject: `${NOTIFICATION_SUBJECT}: ${topicLabel}`,
+          subject:
+            unreadCount > 1
+              ? `${NOTIFICATION_SUBJECT}: ${topicLabel} (${unreadCount} new)`
+              : `${NOTIFICATION_SUBJECT}: ${topicLabel}`,
           html: `
           <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px; color: #1c1917;">
             <p style="font-size: 12px; font-weight: 700; color: #0f766e; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 12px;">DAE</p>
             <h1 style="font-size: 24px; line-height: 1.3; font-weight: 700; margin: 0 0 8px;">${sender.handle} replied.</h1>
             <p style="margin: 0 0 20px; color: #57534e;">Topic: ${headline}</p>
+            <p style="margin: 0 0 18px; color: #57534e;">${unreadCount > 1 ? `${unreadCount} unread messages are waiting.` : 'There is a new unread reply waiting.'}</p>
 
             <div style="background: #f8fafc; border-radius: 18px; padding: 18px; margin-bottom: 14px;">
               <p style="font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 6px;">${sender.handle}</p>
@@ -230,6 +269,7 @@ export async function sendThreadMessageNotifications({
           metadata: {
             senderId,
             senderHandle: sender.handle,
+            unreadCount,
           },
         })
       } catch (error) {

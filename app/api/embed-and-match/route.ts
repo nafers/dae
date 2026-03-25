@@ -1,6 +1,7 @@
 import { after, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { generateHandle } from '@/lib/handles'
+import { fetchNearMatches } from '@/lib/near-matches'
 import { sendTopicFollowDigest } from '@/lib/follow-notifications'
 import { findBestMatchCandidate } from '@/lib/matching'
 import { trackAnalyticsEvent } from '@/lib/analytics'
@@ -60,6 +61,12 @@ export async function POST(request: Request) {
     })
 
     if (!bestMatch) {
+      const nearMatches = await fetchNearMatches({
+        currentUserId: user.id,
+        daeText: trimmed,
+        daeEmbedding: embedding,
+      })
+
       after(async () => {
         await sendTopicFollowDigest({
           submitterId: user.id,
@@ -73,9 +80,17 @@ export async function POST(request: Request) {
         eventName: 'dae_waiting',
         userId: user.id,
         daeId: newDae.id,
+        metadata: {
+          nearRoomCount: nearMatches.nearRooms.length,
+          nearTopicCount: nearMatches.nearTopics.length,
+        },
       })
 
-      return NextResponse.json({ status: 'waiting' })
+      return NextResponse.json({
+        status: 'waiting',
+        daeId: newDae.id,
+        ...nearMatches,
+      })
     }
 
     const { data: priorHandleRows } = await admin

@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server'
+import { fetchRoomModerationStates } from '@/lib/moderation-state'
 import { fetchThreadDirectory, type ThreadDirectoryItem } from '@/lib/thread-directory'
 
 interface ModerationEventRow {
@@ -20,6 +21,9 @@ export interface ModerationReportItem {
   reviewerId: string | null
   notes: string | null
   room: ThreadDirectoryItem | null
+  roomHidden: boolean
+  joinLocked: boolean
+  roomReportCount: number
 }
 
 function buildReportKey(row: ModerationEventRow) {
@@ -66,16 +70,18 @@ export async function fetchModerationQueue(currentUserId: string) {
 
   const reportRows = rows.filter((row) => row.event_name === 'thread_reported')
   const matchIds = [...new Set(reportRows.map((row) => row.match_id).filter(Boolean) as string[])]
-  const rooms =
+  const [rooms, roomStates] = await Promise.all([
     matchIds.length > 0
-      ? await fetchThreadDirectory({
+      ? fetchThreadDirectory({
           currentUserId,
           scope: 'all',
           includeState: false,
           matchIds,
           limit: matchIds.length,
         })
-      : []
+      : Promise.resolve([]),
+    fetchRoomModerationStates(matchIds),
+  ])
   const roomByMatchId = new Map(rooms.map((room) => [room.matchId, room] as const))
 
   const items = reportRows.map((row) => {
@@ -93,6 +99,9 @@ export async function fetchModerationQueue(currentUserId: string) {
       reviewerId: review?.reviewerId ?? null,
       notes: review?.notes ?? null,
       room: row.match_id ? roomByMatchId.get(row.match_id) ?? null : null,
+      roomHidden: row.match_id ? (roomStates.get(row.match_id)?.hidden ?? false) : false,
+      joinLocked: row.match_id ? (roomStates.get(row.match_id)?.joinLocked ?? false) : false,
+      roomReportCount: row.match_id ? (roomStates.get(row.match_id)?.reportCount ?? 0) : 0,
     } satisfies ModerationReportItem
   })
 

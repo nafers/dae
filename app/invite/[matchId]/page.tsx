@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { getRequestUser } from '@/lib/request-user'
+import { fetchRoomModerationStates, getRoomModerationState } from '@/lib/moderation-state'
 import { getTopicPresentation } from '@/lib/topic-intelligence'
 import { fetchThreadDirectory } from '@/lib/thread-directory'
 
@@ -27,6 +28,12 @@ export default async function InvitePage({ params }: Props) {
   })
 
   if (!thread) {
+    notFound()
+  }
+  const roomStates = await fetchRoomModerationStates([matchId])
+  const moderationState = getRoomModerationState(roomStates, matchId)
+
+  if (moderationState.hidden) {
     notFound()
   }
 
@@ -60,6 +67,11 @@ export default async function InvitePage({ params }: Props) {
             <span className="rounded-full bg-[var(--dae-surface)] px-3 py-1 text-xs font-medium text-[var(--dae-muted)]">
               Room {matchId.slice(0, 8)}
             </span>
+            {moderationState.joinLocked ? (
+              <span className="rounded-full bg-[var(--dae-surface)] px-3 py-1 text-xs font-medium text-[var(--dae-muted)]">
+                Joins paused
+              </span>
+            ) : null}
           </div>
 
           <div className="mt-5 grid gap-3 md:grid-cols-2">
@@ -85,22 +97,32 @@ export default async function InvitePage({ params }: Props) {
             <div className="mt-3 grid gap-2 text-sm leading-6 text-[var(--dae-muted)]">
               <p>1. Sign in.</p>
               <p>2. Keep or submit a DAE that means the same thing.</p>
-              <p>3. Request to join this room from Review.</p>
+              <p>3. {moderationState.joinLocked ? 'This room is paused for new joins right now, but you can still follow the topic.' : 'Request to join this room from Review.'}</p>
             </div>
           </div>
 
           <div className="mt-6 flex flex-wrap gap-2">
             <Link
-              href={`/?next=${encodeURIComponent(`/review?invite=${matchId}`)}`}
+              href={
+                moderationState.joinLocked
+                  ? `/?next=${encodeURIComponent(`/topics/${presentation.topicKey}`)}`
+                  : `/?next=${encodeURIComponent(`/review?invite=${matchId}`)}`
+              }
               className="rounded-full border border-[var(--dae-accent)] bg-[var(--dae-accent-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent)] hover:opacity-95"
             >
-              Sign in to join
+              {moderationState.joinLocked ? 'Sign in to follow topic' : 'Sign in to join'}
             </Link>
             <Link
-              href={`/?next=${encodeURIComponent(`/submit?draft=${presentation.searchQuery}`)}`}
+              href={`/?next=${encodeURIComponent(`/submit?draft=${presentation.searchQuery}&invite=${matchId}`)}`}
               className="rounded-full border border-[var(--dae-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-ink)] hover:border-[var(--dae-muted)]"
             >
-              Start a DAE first
+              Add your DAE
+            </Link>
+            <Link
+              href={`/topics/${encodeURIComponent(presentation.topicKey)}`}
+              className="rounded-full border border-[var(--dae-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-ink)] hover:border-[var(--dae-muted)]"
+            >
+              Open topic
             </Link>
           </div>
         </div>

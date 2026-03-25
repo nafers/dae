@@ -1,4 +1,5 @@
 import { fetchCachedBrowseTopics, type BrowseTopicItem } from '@/lib/browse-directory'
+import { fetchRoomModerationStates, getRoomModerationState } from '@/lib/moderation-state'
 import { scoreTextPair } from '@/lib/text-similarity'
 import { createAdminClient } from '@/lib/supabase/server'
 import { fetchThreadDirectory } from '@/lib/thread-directory'
@@ -42,12 +43,14 @@ export async function fetchTopicHubData({
       includeMessages: false,
     }),
   ])
+  const roomStates = await fetchRoomModerationStates(threads.map((thread) => thread.matchId))
 
   const waitingPrompts = ((daes ?? []) as TopicHubWaitingRow[])
     .filter((dae) => dae.status === 'unmatched' && scoreTopicAffinity(topic, dae.text) >= 0.34)
     .slice(0, 8)
 
   const relatedRooms = threads
+    .filter((thread) => !getRoomModerationState(roomStates, thread.matchId).hidden)
     .map((thread) => ({
       thread,
       score: Math.max(...thread.participants.map((participant) => scoreTopicAffinity(topic, participant.daeText)), 0),

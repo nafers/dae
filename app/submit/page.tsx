@@ -8,12 +8,14 @@ import { createAdminClient } from '@/lib/supabase/server'
 interface Props {
   searchParams: Promise<{
     draft?: string | string[]
+    invite?: string | string[]
   }>
 }
 
 export default async function SubmitPage({ searchParams }: Props) {
-  const { draft } = await searchParams
+  const { draft, invite } = await searchParams
   const initialDraft = Array.isArray(draft) ? draft[0] ?? '' : draft ?? ''
+  const inviteMatchId = Array.isArray(invite) ? invite[0] ?? '' : invite ?? ''
   const user = await getRequestUser()
 
   if (!user) redirect('/')
@@ -58,10 +60,16 @@ export default async function SubmitPage({ searchParams }: Props) {
             >
               Browse
             </Link>
+            <Link
+              href="/topics"
+              className="rounded-full border border-[var(--dae-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-ink)] hover:border-[var(--dae-muted)]"
+            >
+              Topics
+            </Link>
           </div>
         </section>
 
-        <SubmitForm initialText={initialDraft} />
+        <SubmitForm initialText={initialDraft} initialInviteMatchId={inviteMatchId} />
       </div>
     </AppShell>
   )

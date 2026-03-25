@@ -31,6 +31,8 @@ export default async function ModerationPage() {
 
   const { items, unresolved, resolved } = await fetchModerationQueue(user.id)
   const followUpCount = resolved.filter((item) => item.decision === 'follow_up').length
+  const hiddenRoomCount = items.filter((item) => item.roomHidden).length
+  const lockedRoomCount = items.filter((item) => item.joinLocked).length
 
   return (
     <AppShell
@@ -41,10 +43,12 @@ export default async function ModerationPage() {
       description="Review reports, spot recurring bad-fit rooms, and keep friend testing safe."
     >
       <div className="space-y-4">
-        <section className="grid gap-3 md:grid-cols-3">
+        <section className="grid gap-3 md:grid-cols-5">
           <MetricCard label="Open reports" value={unresolved.length} detail="Not yet reviewed" />
           <MetricCard label="Reviewed" value={resolved.length} detail="Already triaged" />
           <MetricCard label="Follow up" value={followUpCount} detail="Needs another pass" />
+          <MetricCard label="Hidden rooms" value={hiddenRoomCount} detail="Removed from discovery" />
+          <MetricCard label="Joins paused" value={lockedRoomCount} detail="No new rescue joins" />
         </section>
 
         <ModerationQueue initialItems={items} />
