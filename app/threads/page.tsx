@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import AppShell from '@/components/AppShell'
+import ShareButton from '@/components/ShareButton'
 import ThreadOverviewCard from '@/components/ThreadOverviewCard'
 import { isFounderEmail } from '@/lib/founders'
 import { getRequestUser } from '@/lib/request-user'
@@ -120,6 +121,14 @@ export default async function ThreadsPage({ searchParams }: Props) {
                   >
                     Open
                   </Link>
+                }
+                secondaryAction={
+                  <ShareButton
+                    path={`/review?invite=${encodeURIComponent(thread.matchId)}`}
+                    title={`DAE room invite: ${thread.matchId.slice(0, 8)}`}
+                    text="See if your DAE fits this room."
+                    label="Invite"
+                  />
                 }
               />
             ))}

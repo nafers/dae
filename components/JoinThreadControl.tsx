@@ -12,32 +12,42 @@ interface Props {
   matchId: string
   availableDaes: WaitingDaeOption[]
   defaultDaeId?: string
+  initialRequestedDaeIds?: string[]
 }
 
-export default function JoinThreadControl({ matchId, availableDaes, defaultDaeId }: Props) {
+export default function JoinThreadControl({
+  matchId,
+  availableDaes,
+  defaultDaeId,
+  initialRequestedDaeIds = [],
+}: Props) {
   const router = useRouter()
   const [selectedDaeId, setSelectedDaeId] = useState(defaultDaeId ?? availableDaes[0]?.id ?? '')
-  const [joining, setJoining] = useState(false)
+  const [requesting, setRequesting] = useState(false)
+  const [requestedDaeIds, setRequestedDaeIds] = useState<string[]>(initialRequestedDaeIds)
   const [error, setError] = useState('')
+  const requested = selectedDaeId ? requestedDaeIds.includes(selectedDaeId) : false
 
   useEffect(() => {
     setSelectedDaeId(defaultDaeId ?? availableDaes[0]?.id ?? '')
+    setRequestedDaeIds(initialRequestedDaeIds)
     setError('')
-  }, [availableDaes, defaultDaeId])
+  }, [availableDaes, defaultDaeId, initialRequestedDaeIds])
 
-  async function joinThread() {
-    if (!selectedDaeId || joining) return
+  async function requestJoin() {
+    if (!selectedDaeId || requesting || requested) return
 
-    setJoining(true)
+    setRequesting(true)
     setError('')
 
     try {
-      const response = await fetch('/api/threads/join', {
+      const response = await fetch('/api/thread-join-requests', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          action: 'request',
           matchId,
           daeId: selectedDaeId,
         }),
@@ -45,13 +55,19 @@ export default function JoinThreadControl({ matchId, availableDaes, defaultDaeId
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(typeof data?.error === 'string' ? data.error : 'Unable to join this chat.')
+        throw new Error(
+          typeof data?.error === 'string' ? data.error : 'Unable to request this chat.'
+        )
       }
 
-      router.push(`/threads/${matchId}`)
+      setRequestedDaeIds((current) =>
+        current.includes(selectedDaeId) ? current : [...current, selectedDaeId]
+      )
+      router.refresh()
     } catch (error) {
-      setError(error instanceof Error ? error.message : 'Unable to join this chat.')
-      setJoining(false)
+      setError(error instanceof Error ? error.message : 'Unable to request this chat.')
+    } finally {
+      setRequesting(false)
     }
   }
 
@@ -80,13 +96,19 @@ export default function JoinThreadControl({ matchId, availableDaes, defaultDaeId
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
-          onClick={() => void joinThread()}
-          disabled={!selectedDaeId || joining}
-          className="rounded-full bg-[var(--dae-accent-rose)] px-4 py-2 text-sm font-medium text-white transition-all hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-50"
+          onClick={() => void requestJoin()}
+          disabled={!selectedDaeId || requesting || requested}
+          className={`rounded-full px-4 py-2 text-sm font-medium transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+            requested
+              ? 'border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)] text-[var(--dae-accent-cool)]'
+              : 'bg-[var(--dae-accent-rose)] text-white hover:opacity-95'
+          }`}
         >
-          {joining ? 'Joining...' : 'Join with this DAE'}
+          {requesting ? 'Requesting...' : requested ? 'Requested' : 'Request to join'}
         </button>
-        <p className="text-xs text-[var(--dae-muted)]">Adds your waiting prompt to this room.</p>
+        <p className="text-xs text-[var(--dae-muted)]">
+          {requested ? 'Waiting for someone in the room to approve.' : 'Send your waiting DAE into review for this room.'}
+        </p>
       </div>
 
       {error ? <p className="text-xs text-red-500">{error}</p> : null}

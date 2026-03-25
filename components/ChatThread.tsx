@@ -5,8 +5,11 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getHandleInitial, getParticipantTheme } from '@/lib/chat-theme'
+import type { ThreadJoinRequest } from '@/lib/thread-join-requests'
 import ChatInput from './ChatInput'
+import JoinRequestsPanel from './JoinRequestsPanel'
 import MatchFeedbackPrompt from './MatchFeedbackPrompt'
+import ShareButton from './ShareButton'
 import ThreadExitControls from './ThreadExitControls'
 
 interface Message {
@@ -34,7 +37,9 @@ interface Props {
   }
   threadHeadline: string
   threadTopicLabel: string
+  threadSummary: string
   supportingDaes: string[]
+  initialJoinRequests: ThreadJoinRequest[]
 }
 
 function orderParticipants(participants: Participant[], myUserId: string) {
@@ -55,7 +60,9 @@ export default function ChatThread({
   initialThreadState,
   threadHeadline,
   threadTopicLabel,
+  threadSummary,
   supportingDaes,
+  initialJoinRequests,
 }: Props) {
   const [participants, setParticipants] = useState<Participant[]>(
     orderParticipants(initialParticipants, myUserId)
@@ -360,14 +367,15 @@ export default function ChatThread({
             <h2 className="mt-2 text-xl font-semibold tracking-tight text-[var(--dae-ink)]">
               {threadHeadline}
             </h2>
+            <p className="mt-1 text-sm leading-6 text-[var(--dae-muted)]">{threadSummary}</p>
             {supportingDaes.length > 0 ? (
               <p className="mt-1 line-clamp-2 text-sm leading-6 text-[var(--dae-muted)]">
-                Also here: {supportingDaes.join(' · ')}
+                Also here: {supportingDaes.join(' | ')}
               </p>
             ) : null}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={handleBack}
@@ -384,6 +392,12 @@ export default function ChatThread({
             >
               All chats
             </Link>
+            <ShareButton
+              path={`/review?invite=${encodeURIComponent(matchId)}`}
+              title={`DAE room: ${threadTopicLabel}`}
+              text={`See if your DAE fits: ${threadHeadline}`}
+              label="Invite"
+            />
           </div>
         </div>
 
@@ -408,6 +422,8 @@ export default function ChatThread({
             </div>
           ))}
         </div>
+
+        <JoinRequestsPanel matchId={matchId} initialRequests={initialJoinRequests} />
 
         <div className="mt-3">
           <ThreadExitControls
@@ -456,7 +472,9 @@ export default function ChatThread({
                   >
                     {message.content}
                   </div>
-                  <span className="px-1 text-[10px] text-[var(--dae-muted)]">{formatTime(message.created_at)}</span>
+                  <span className="px-1 text-[10px] text-[var(--dae-muted)]">
+                    {formatTime(message.created_at)}
+                  </span>
                 </div>
               </div>
             </div>

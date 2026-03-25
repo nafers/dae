@@ -67,6 +67,7 @@ export async function fetchThreadDirectory({
   includeEmbeddings = false,
   includeState = scope === 'joined',
   includeMessages = true,
+  matchIds: requestedMatchIds,
 }: {
   currentUserId: string
   scope: ThreadScope
@@ -74,11 +75,20 @@ export async function fetchThreadDirectory({
   includeEmbeddings?: boolean
   includeState?: boolean
   includeMessages?: boolean
+  matchIds?: string[]
 }): Promise<ThreadDirectoryItem[]> {
   const admin = createAdminClient()
   let matchRows: MatchRow[] = []
+  const uniqueRequestedMatchIds = [...new Set((requestedMatchIds ?? []).filter(Boolean))]
 
-  if (scope === 'joined') {
+  if (uniqueRequestedMatchIds.length > 0) {
+    const { data: selectedMatches } = await admin
+      .from('matches')
+      .select('id, created_at')
+      .in('id', uniqueRequestedMatchIds)
+
+    matchRows = (selectedMatches ?? []) as MatchRow[]
+  } else if (scope === 'joined') {
     const { data: myParticipantRows } = await admin
       .from('thread_participants')
       .select('match_id')

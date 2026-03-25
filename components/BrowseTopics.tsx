@@ -1,8 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { useDeferredValue, useState } from 'react'
+import { useDeferredValue, useEffect, useState } from 'react'
 import { BrowseTopicItem } from '@/lib/browse-directory'
+import FollowTopicButton from './FollowTopicButton'
+import ShareButton from './ShareButton'
 
 type BrowseSort = 'trending' | 'new' | 'waiting'
 type BrowseFilter = 'all' | 'trending' | 'waiting' | 'connected' | 'fresh'
@@ -10,6 +12,8 @@ type BrowseFilter = 'all' | 'trending' | 'waiting' | 'connected' | 'fresh'
 interface Props {
   topics: BrowseTopicItem[]
   waitingCount: number
+  initialQuery?: string
+  followedTopicKeys?: string[]
 }
 
 const sortOptions: Array<{ key: BrowseSort; label: string }> = [
@@ -51,12 +55,22 @@ function getSignalLabel(topic: BrowseTopicItem) {
   return `${topic.matchedCount} connected`
 }
 
-export default function BrowseTopics({ topics, waitingCount }: Props) {
-  const [query, setQuery] = useState('')
+export default function BrowseTopics({
+  topics,
+  waitingCount,
+  initialQuery = '',
+  followedTopicKeys = [],
+}: Props) {
+  const [query, setQuery] = useState(initialQuery)
   const [sort, setSort] = useState<BrowseSort>('trending')
   const [filter, setFilter] = useState<BrowseFilter>('all')
   const deferredQuery = useDeferredValue(query)
   const normalizedQuery = deferredQuery.trim().toLowerCase()
+  const followedTopicKeySet = new Set(followedTopicKeys)
+
+  useEffect(() => {
+    setQuery(initialQuery)
+  }, [initialQuery])
 
   const filteredTopics = [...topics]
     .filter((topic) => {
@@ -249,7 +263,12 @@ export default function BrowseTopics({ topics, waitingCount }: Props) {
                 </div>
               </div>
 
-              <p className="mt-4 text-xl font-semibold leading-8 text-[var(--dae-ink)]">{topic.headline}</p>
+              <div className="mt-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent-rose)]">
+                  {topic.label}
+                </p>
+                <p className="mt-2 text-xl font-semibold leading-8 text-[var(--dae-ink)]">{topic.headline}</p>
+              </div>
               <p className="mt-2 text-sm leading-6 text-[var(--dae-muted)]">{topic.summary}</p>
 
               {topic.keywords.length > 0 ? (
@@ -296,6 +315,19 @@ export default function BrowseTopics({ topics, waitingCount }: Props) {
                     Attach a waiting DAE
                   </Link>
                 ) : null}
+                <FollowTopicButton
+                  topicKey={topic.topicKey}
+                  headline={topic.headline}
+                  label={topic.label}
+                  searchQuery={topic.searchQuery}
+                  initialFollowing={followedTopicKeySet.has(topic.topicKey)}
+                />
+                <ShareButton
+                  path={`/browse?q=${encodeURIComponent(topic.searchQuery)}`}
+                  title={`DAE topic: ${topic.label}`}
+                  text={topic.summary}
+                  label="Share topic"
+                />
               </div>
             </article>
           ))}

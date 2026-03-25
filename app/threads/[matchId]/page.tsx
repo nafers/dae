@@ -2,13 +2,14 @@ import { after } from 'next/server'
 import { redirect, notFound } from 'next/navigation'
 import Link from 'next/link'
 import AppShell from '@/components/AppShell'
-import { createAdminClient } from '@/lib/supabase/server'
 import ChatThread from '@/components/ChatThread'
 import { trackAnalyticsEvent } from '@/lib/analytics'
 import { isFounderEmail } from '@/lib/founders'
 import { getRequestUser } from '@/lib/request-user'
+import { createAdminClient } from '@/lib/supabase/server'
+import { fetchPendingJoinRequestsForMatch } from '@/lib/thread-join-requests'
 import { fetchThreadUserStates, getThreadUserState } from '@/lib/thread-state'
-import { chooseRepresentativeText, getTopicLabel } from '@/lib/topic-label'
+import { getTopicPresentation } from '@/lib/topic-intelligence'
 
 interface Props {
   params: Promise<{ matchId: string }>
@@ -52,8 +53,6 @@ export default async function ThreadPage({ params }: Props) {
   if (!user) redirect(`/?next=/threads/${matchId}`)
 
   const admin = createAdminClient()
-
-  // Get both participants for this match (relaxed RLS via admin)
   const { data: participants, error } = await admin
     .from('thread_participants')
     .select(`
@@ -87,34 +86,41 @@ export default async function ThreadPage({ params }: Props) {
         dae: getDaeText(participant.daes),
       })),
   ]
+
   const daeTexts = uniqueTexts(orderedParticipants.map((participant) => participant.dae))
-  const threadHeadline = chooseRepresentativeText(daeTexts) || 'Shared room'
-  const threadTopicLabel = getTopicLabel(daeTexts) || 'Chat'
-  const supportingDaes = daeTexts.filter((text) => text !== threadHeadline).slice(0, 2)
+  const [{ data: initialMessages }, { data: feedbackEvent }, threadStateMap, topicPresentation, joinRequests] =
+    await Promise.all([
+      admin
+        .from('messages')
+        .select('id, sender_id, content, created_at')
+        .eq('match_id', matchId)
+        .order('created_at', { ascending: true })
+        .limit(50),
+      admin
+        .from('analytics_events')
+        .select('metadata')
+        .eq('event_name', 'match_feedback_submitted')
+        .eq('user_id', user.id)
+        .eq('match_id', matchId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      fetchThreadUserStates({
+        userIds: [user.id],
+        matchIds: [matchId],
+      }),
+      getTopicPresentation(daeTexts, {
+        matchedCount: Math.max(orderedParticipants.length - 1, 0),
+        forceAI: true,
+      }),
+      fetchPendingJoinRequestsForMatch(matchId),
+    ])
 
-  const [{ data: initialMessages }, { data: feedbackEvent }, threadStateMap] = await Promise.all([
-    admin
-      .from('messages')
-      .select('id, sender_id, content, created_at')
-      .eq('match_id', matchId)
-      .order('created_at', { ascending: true })
-      .limit(50),
-    admin
-      .from('analytics_events')
-      .select('metadata')
-      .eq('event_name', 'match_feedback_submitted')
-      .eq('user_id', user.id)
-      .eq('match_id', matchId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    fetchThreadUserStates({
-      userIds: [user.id],
-      matchIds: [matchId],
-    }),
-  ])
   const initialThreadState = getThreadUserState(threadStateMap, user.id, matchId)
-
+  const threadHeadline = topicPresentation.headline || 'Shared room'
+  const threadTopicLabel = topicPresentation.label || 'Chat'
+  const threadSummary = topicPresentation.summary
+  const supportingDaes = daeTexts.filter((text) => text !== threadHeadline).slice(0, 2)
   const initialFeedback = ((feedbackEvent?.metadata as { verdict?: MatchFeedback } | null)?.verdict ??
     null) as MatchFeedback
 
@@ -137,7 +143,7 @@ export default async function ThreadPage({ params }: Props) {
       userEmail={user.email ?? ''}
       eyebrow={threadTopicLabel}
       title={threadHeadline}
-      description={`Room ${matchId.slice(0, 8)} · ${orderedParticipants.length} ${orderedParticipants.length === 1 ? 'person' : 'people'}`}
+      description={`${threadSummary} | Room ${matchId.slice(0, 8)} | ${orderedParticipants.length} ${orderedParticipants.length === 1 ? 'person' : 'people'}`}
       compact
       actions={
         isFounderEmail(user.email) ? (
@@ -159,7 +165,9 @@ export default async function ThreadPage({ params }: Props) {
         initialThreadState={initialThreadState}
         threadHeadline={threadHeadline}
         threadTopicLabel={threadTopicLabel}
+        threadSummary={threadSummary}
         supportingDaes={supportingDaes}
+        initialJoinRequests={joinRequests}
       />
     </AppShell>
   )

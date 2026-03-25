@@ -5,6 +5,7 @@ import JoinThreadControl from '@/components/JoinThreadControl'
 import ThreadOverviewCard from '@/components/ThreadOverviewCard'
 import WaitingDaesList from '@/components/WaitingDaesList'
 import { isFounderEmail } from '@/lib/founders'
+import { fetchJoinRequestStatesForUser } from '@/lib/thread-join-requests'
 import { getRequestUser } from '@/lib/request-user'
 import { scoreThreadAttachmentFit } from '@/lib/thread-fit'
 import { createAdminClient } from '@/lib/supabase/server'
@@ -21,6 +22,7 @@ interface WaitingDae {
 interface Props {
   searchParams: Promise<{
     topic?: string | string[]
+    invite?: string | string[]
   }>
 }
 
@@ -43,14 +45,15 @@ function getFitTone(score: number) {
 }
 
 export default async function ReviewPage({ searchParams }: Props) {
-  const { topic } = await searchParams
+  const { topic, invite } = await searchParams
   const focusedTopic = Array.isArray(topic) ? topic[0] ?? '' : topic ?? ''
+  const inviteMatchId = Array.isArray(invite) ? invite[0] ?? '' : invite ?? ''
   const user = await getRequestUser()
 
   if (!user) redirect('/')
 
   const admin = createAdminClient()
-  const [{ data: waitingDaes }, discoverThreads] = await Promise.all([
+  const [{ data: waitingDaes }, discoverThreads, myJoinRequests, invitedThreads] = await Promise.all([
     admin
       .from('daes')
       .select('id, text, embedding, created_at')
@@ -65,9 +68,27 @@ export default async function ReviewPage({ searchParams }: Props) {
       includeState: false,
       includeMessages: false,
     }),
+    fetchJoinRequestStatesForUser(user.id),
+    inviteMatchId
+      ? fetchThreadDirectory({
+          currentUserId: user.id,
+          scope: 'all',
+          limit: 1,
+          includeEmbeddings: true,
+          includeState: false,
+          includeMessages: false,
+          matchIds: [inviteMatchId],
+        })
+      : Promise.resolve([]),
   ])
 
   const typedWaitingDaes = (waitingDaes ?? []) as WaitingDae[]
+  const pendingRequestKeys = new Set(
+    myJoinRequests
+      .filter((request) => request.state === 'requested')
+      .map((request) => `${request.matchId}:${request.daeId}`)
+  )
+  const invitedThread = invitedThreads[0]
   const suggestionGroups = typedWaitingDaes.map((dae) => ({
     dae,
     focusScore: focusedTopic ? scoreTextPair(focusedTopic, dae.text) : 0,
@@ -141,6 +162,45 @@ export default async function ReviewPage({ searchParams }: Props) {
         </div>
       ) : (
         <div className="space-y-5">
+          {invitedThread ? (
+            <section className="rounded-[28px] border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)]/60 p-4 shadow-[0_14px_36px_rgba(32,26,22,0.05)]">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--dae-accent-cool)]">
+                    Invited room
+                  </p>
+                  <p className="mt-1 text-sm text-[var(--dae-ink)]">
+                    Someone shared this room with you. If one of your waiting prompts fits, request to join it.
+                  </p>
+                </div>
+                <Link
+                  href="/review"
+                  className="rounded-full border border-[var(--dae-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
+                >
+                  Clear
+                </Link>
+              </div>
+
+              <div className="mt-4">
+                <ThreadOverviewCard
+                  thread={invitedThread}
+                  showLatestActivity={false}
+                  primaryAction={
+                    typedWaitingDaes.length > 0 ? (
+                      <JoinThreadControl
+                        matchId={invitedThread.matchId}
+                        availableDaes={typedWaitingDaes.map((dae) => ({ id: dae.id, text: dae.text }))}
+                        initialRequestedDaeIds={typedWaitingDaes
+                          .filter((dae) => pendingRequestKeys.has(`${invitedThread.matchId}:${dae.id}`))
+                          .map((dae) => dae.id)}
+                      />
+                    ) : undefined
+                  }
+                />
+              </div>
+            </section>
+          ) : null}
+
           {focusedTopic ? (
             <section className="rounded-[24px] border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] p-4">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -202,6 +262,9 @@ export default async function ReviewPage({ searchParams }: Props) {
                               matchId={thread.matchId}
                               availableDaes={[{ id: dae.id, text: dae.text }]}
                               defaultDaeId={dae.id}
+                              initialRequestedDaeIds={
+                                pendingRequestKeys.has(`${thread.matchId}:${dae.id}`) ? [dae.id] : []
+                              }
                             />
                           }
                           secondaryAction={

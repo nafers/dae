@@ -6,20 +6,30 @@ import { isFounderEmail } from '@/lib/founders'
 import { getRequestUser } from '@/lib/request-user'
 import { createAdminClient } from '@/lib/supabase/server'
 import { fetchCachedBrowseTopics } from '@/lib/browse-directory'
+import { fetchActiveTopicFollows } from '@/lib/topic-follows'
 
-export default async function BrowsePage() {
+interface Props {
+  searchParams: Promise<{
+    q?: string | string[]
+  }>
+}
+
+export default async function BrowsePage({ searchParams }: Props) {
+  const { q } = await searchParams
+  const initialQuery = Array.isArray(q) ? q[0] ?? '' : q ?? ''
   const user = await getRequestUser()
 
   if (!user) redirect('/')
 
   const admin = createAdminClient()
-  const [{ count: waitingCount }, browseTopics] = await Promise.all([
+  const [{ count: waitingCount }, browseTopics, followedTopics] = await Promise.all([
     admin
       .from('daes')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id)
       .eq('status', 'unmatched'),
     fetchCachedBrowseTopics(),
+    fetchActiveTopicFollows(user.id),
   ])
 
   return (
@@ -28,7 +38,11 @@ export default async function BrowsePage() {
       userEmail={user.email ?? ''}
       eyebrow="Browse"
       title="Browse ideas"
-      description={(waitingCount ?? 0) > 0 ? 'Search ideas. Review to attach yours.' : 'Search the pool.'}
+      description={
+        (waitingCount ?? 0) > 0
+          ? `Search ideas. ${followedTopics.size} following. Review to attach yours.`
+          : `Search the pool. ${followedTopics.size} following.`
+      }
       actions={
         isFounderEmail(user.email) ? (
           <Link
@@ -45,7 +59,12 @@ export default async function BrowsePage() {
           <h2 className="text-2xl font-semibold text-[var(--dae-ink)]">Nothing to browse yet.</h2>
         </div>
       ) : (
-        <BrowseTopics topics={browseTopics} waitingCount={waitingCount ?? 0} />
+        <BrowseTopics
+          topics={browseTopics}
+          waitingCount={waitingCount ?? 0}
+          initialQuery={initialQuery}
+          followedTopicKeys={[...followedTopics.keys()]}
+        />
       )}
     </AppShell>
   )

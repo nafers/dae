@@ -1,5 +1,8 @@
 import { createAdminClient } from '@/lib/supabase/server'
+import { fetchCachedBrowseTopics } from '@/lib/browse-directory'
 import { fetchThreadDirectory, type ThreadDirectoryItem } from '@/lib/thread-directory'
+import { fetchJoinRequestsForMatches, fetchJoinRequestStatesForUser } from '@/lib/thread-join-requests'
+import { fetchActiveTopicFollows } from '@/lib/topic-follows'
 import { chooseRepresentativeText, getTopicLabel } from '@/lib/topic-label'
 
 interface WaitingDaeRow {
@@ -8,9 +11,13 @@ interface WaitingDaeRow {
   created_at: string
 }
 
+interface ActivityDismissEventRow {
+  metadata: Record<string, unknown> | null
+}
+
 export interface ActivityItem {
   id: string
-  kind: 'reply' | 'match' | 'waiting'
+  kind: 'reply' | 'match' | 'waiting' | 'follow' | 'request'
   title: string
   detail: string
   href: string
@@ -33,32 +40,124 @@ function buildThreadTopic(thread: ThreadDirectoryItem) {
   return getTopicLabel(thread.participants.map((participant) => participant.daeText).filter(Boolean))
 }
 
+async function fetchDismissedActivityIds(userId: string) {
+  const admin = createAdminClient()
+  const { data } = await admin
+    .from('analytics_events')
+    .select('metadata')
+    .eq('user_id', userId)
+    .eq('event_name', 'activity_dismissed')
+    .order('created_at', { ascending: false })
+    .limit(200)
+
+  const dismissedItemIds = new Set<string>()
+
+  for (const row of (data ?? []) as ActivityDismissEventRow[]) {
+    const itemId = typeof row.metadata?.itemId === 'string' ? row.metadata.itemId : null
+    if (itemId) {
+      dismissedItemIds.add(itemId)
+    }
+  }
+
+  return dismissedItemIds
+}
+
 export async function fetchActivityFeed(currentUserId: string) {
   const admin = createAdminClient()
-  const [threadCards, { data: waitingDaes }] = await Promise.all([
-    fetchThreadDirectory({
-      currentUserId,
-      scope: 'joined',
-      limit: 18,
-    }),
-    admin
-      .from('daes')
-      .select('id, text, created_at')
-      .eq('user_id', currentUserId)
-      .eq('status', 'unmatched')
-      .order('created_at', { ascending: false })
-      .limit(8),
-  ])
+  const [threadCards, { data: waitingDaes }, followedTopics, browseTopics, myJoinRequests] =
+    await Promise.all([
+      fetchThreadDirectory({
+        currentUserId,
+        scope: 'joined',
+        limit: 18,
+      }),
+      admin
+        .from('daes')
+        .select('id, text, created_at')
+        .eq('user_id', currentUserId)
+        .eq('status', 'unmatched')
+        .order('created_at', { ascending: false })
+        .limit(8),
+      fetchActiveTopicFollows(currentUserId),
+      fetchCachedBrowseTopics(),
+      fetchJoinRequestStatesForUser(currentUserId),
+    ])
 
   const visibleThreads = threadCards.filter((thread) => !thread.isHidden)
   const unreadThreads = visibleThreads.filter((thread) => thread.hasUnread)
   const quietFreshMatches = visibleThreads.filter((thread) => thread.lastMessagePreview === 'No messages yet')
   const waitingRows = (waitingDaes ?? []) as WaitingDaeRow[]
   const unreadMatchIds = new Set(unreadThreads.map((thread) => thread.matchId))
+  const incomingJoinRequests = (await fetchJoinRequestsForMatches(visibleThreads.map((thread) => thread.matchId)))
+    .filter((request) => request.state === 'requested' && request.requesterId !== currentUserId)
+  const dismissedItemIds = await fetchDismissedActivityIds(currentUserId)
+
+  const browseTopicByKey = new Map(browseTopics.map((topic) => [topic.topicKey, topic] as const))
+  const followedTopicItems = [...followedTopics.values()]
+    .map((follow) => {
+      const topic = browseTopicByKey.get(follow.topicKey)
+      if (!topic) {
+        return null
+      }
+
+      if (new Date(topic.latestAt).getTime() <= new Date(follow.followedAt).getTime()) {
+        return null
+      }
+
+      return {
+        id: `follow:${follow.topicKey}:${topic.latestAt}`,
+        kind: 'follow' as const,
+        title: follow.label,
+        detail: topic.summary,
+        href: `/browse?q=${encodeURIComponent(follow.searchQuery)}`,
+        timestamp: topic.latestAt,
+        tone: 'rose' as const,
+      }
+    })
+    .filter((item) => item !== null)
+
+  const threadByMatchId = new Map(visibleThreads.map((thread) => [thread.matchId, thread] as const))
+
+  const requestItems: ActivityItem[] = [
+    ...incomingJoinRequests.map((request) => {
+      const thread = threadByMatchId.get(request.matchId)
+      const threadTitle = thread ? buildThreadHeadline(thread) : 'Your room'
+
+      return {
+        id: `request:${request.requestId}:requested`,
+        kind: 'request' as const,
+        title: threadTitle,
+        detail: `Someone wants in with: ${request.daeText}`,
+        href: `/threads/${request.matchId}`,
+        timestamp: request.createdAt,
+        tone: 'warm' as const,
+      }
+    }),
+    ...myJoinRequests.map((request) => {
+      const stateLabel =
+        request.state === 'requested'
+          ? 'Waiting on approval.'
+          : request.state === 'approved'
+            ? 'Approved. Your DAE was attached.'
+            : request.state === 'declined'
+              ? 'Declined. Try another room.'
+              : 'Canceled.'
+
+      return {
+        id: `request:${request.requestId}:${request.state}:${request.resolvedAt ?? request.createdAt}`,
+        kind: 'request' as const,
+        title: request.daeText,
+        detail: stateLabel,
+        href: request.state === 'approved' ? `/threads/${request.matchId}` : '/review',
+        timestamp: request.resolvedAt ?? request.createdAt,
+        tone: request.state === 'approved' ? ('cool' as const) : ('warm' as const),
+      }
+    }),
+  ]
 
   const items: ActivityItem[] = [
     ...unreadThreads.map((thread) => ({
-      id: `reply-${thread.matchId}`,
+      id: `reply:${thread.matchId}:${thread.latestActivityAt}`,
       kind: 'reply' as const,
       title: buildThreadHeadline(thread),
       detail: `${thread.lastMessageSenderLabel}: ${thread.lastMessagePreview}`,
@@ -69,7 +168,7 @@ export async function fetchActivityFeed(currentUserId: string) {
     ...quietFreshMatches
       .filter((thread) => !unreadMatchIds.has(thread.matchId))
       .map((thread) => ({
-        id: `match-${thread.matchId}`,
+        id: `match:${thread.matchId}:${thread.createdAt}`,
         kind: 'match' as const,
         title: buildThreadHeadline(thread),
         detail: `${thread.participantCount} people connected around ${buildThreadTopic(thread)}`,
@@ -77,8 +176,10 @@ export async function fetchActivityFeed(currentUserId: string) {
         timestamp: thread.createdAt,
         tone: 'rose' as const,
       })),
+    ...requestItems,
+    ...followedTopicItems,
     ...waitingRows.map((dae) => ({
-      id: `waiting-${dae.id}`,
+      id: `waiting:${dae.id}`,
       kind: 'waiting' as const,
       title: dae.text,
       detail: 'Still waiting. Review or browse to attach it somewhere useful.',
@@ -86,15 +187,17 @@ export async function fetchActivityFeed(currentUserId: string) {
       timestamp: dae.created_at,
       tone: 'warm' as const,
     })),
-  ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+  ]
+    .filter((item) => !dismissedItemIds.has(item.id))
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
 
   return {
     items,
     summary: {
-      totalCount: unreadThreads.length + waitingRows.length + quietFreshMatches.filter((thread) => !unreadMatchIds.has(thread.matchId)).length,
-      unreadCount: unreadThreads.length,
-      waitingCount: waitingRows.length,
-      freshMatchCount: quietFreshMatches.filter((thread) => !unreadMatchIds.has(thread.matchId)).length,
+      totalCount: items.length,
+      unreadCount: items.filter((item) => item.kind === 'reply').length,
+      waitingCount: items.filter((item) => item.kind === 'waiting').length,
+      freshMatchCount: items.filter((item) => item.kind === 'match').length,
     } satisfies ActivitySummary,
   }
 }

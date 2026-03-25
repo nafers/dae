@@ -7,6 +7,7 @@ import {
   getTopicSamples,
   getTopicSummary,
 } from '@/lib/topic-label'
+import { getTopicPresentation } from '@/lib/topic-intelligence'
 
 interface BrowseDaeRow {
   id: string
@@ -18,10 +19,14 @@ interface BrowseDaeRow {
 
 export interface BrowseTopicItem {
   id: string
+  topicKey: string
+  label: string
   headline: string
   summary: string
   sampleDaes: string[]
   keywords: string[]
+  searchQuery: string
+  usedAI: boolean
   daeCount: number
   uniqueUserCount: number
   waitingCount: number
@@ -78,7 +83,7 @@ export async function fetchBrowseTopics(limit = 80) {
   const dayMs = 1000 * 60 * 60 * 24
   const weekMs = dayMs * 7
 
-  return groups
+  const baseTopics = groups
     .map((group) => {
       const texts = [...new Set(group.map((row) => row.text.trim()).filter(Boolean))]
       const headline = chooseRepresentativeText(texts)
@@ -99,6 +104,7 @@ export async function fetchBrowseTopics(limit = 80) {
 
       return {
         id: group[0]?.id ?? headline,
+        texts,
         headline,
         summary: getTopicSummary(texts, {
           waitingCount,
@@ -114,10 +120,60 @@ export async function fetchBrowseTopics(limit = 80) {
         freshCount,
         trendScore,
         latestAt,
-      } satisfies BrowseTopicItem
+      }
     })
     .filter((topic) => topic.headline.length > 0)
     .sort((a, b) => new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime())
+
+  const aiCandidates = new Set(
+    [...baseTopics]
+      .sort((a, b) => {
+        if (b.trendScore !== a.trendScore) {
+          return b.trendScore - a.trendScore
+        }
+
+        return new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime()
+      })
+      .slice(0, 10)
+      .map((topic) => topic.id)
+  )
+
+  const enhancedTopics = await Promise.all(
+    baseTopics.map(async (topic) => {
+      const presentation = aiCandidates.has(topic.id)
+        ? await getTopicPresentation(topic.texts, {
+            waitingCount: topic.waitingCount,
+            matchedCount: topic.matchedCount,
+          })
+        : await getTopicPresentation(topic.texts, {
+            waitingCount: topic.waitingCount,
+            matchedCount: topic.matchedCount,
+            allowAI: false,
+          })
+
+      return {
+        id: topic.id,
+        topicKey: presentation.topicKey,
+        label: presentation.label,
+        headline: topic.headline,
+        summary: presentation.summary || topic.summary,
+        sampleDaes: topic.sampleDaes,
+        keywords: presentation.keywords.length ? presentation.keywords : topic.keywords,
+        searchQuery: presentation.searchQuery || topic.headline,
+        usedAI: presentation.usedAI,
+        daeCount: topic.daeCount,
+        uniqueUserCount: topic.uniqueUserCount,
+        waitingCount: topic.waitingCount,
+        matchedCount: topic.matchedCount,
+        recentCount: topic.recentCount,
+        freshCount: topic.freshCount,
+        trendScore: topic.trendScore,
+        latestAt: topic.latestAt,
+      } satisfies BrowseTopicItem
+    })
+  )
+
+  return enhancedTopics
 }
 
 export const fetchCachedBrowseTopics = unstable_cache(
