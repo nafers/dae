@@ -1,11 +1,17 @@
+import { after } from 'next/server'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import AppShell from '@/components/AppShell'
 import FollowTopicButton from '@/components/FollowTopicButton'
 import ShareButton from '@/components/ShareButton'
 import ThreadOverviewCard from '@/components/ThreadOverviewCard'
+import TopicCurationControls from '@/components/TopicCurationControls'
 import TopicSignalBar from '@/components/TopicSignalBar'
+import { trackAnalyticsEvent } from '@/lib/analytics'
+import { isFounderEmail } from '@/lib/founders'
 import { fetchTopicHubData, fetchTopicByKey } from '@/lib/topic-hubs'
+import { buildTopicActivityFeed } from '@/lib/topic-activity'
+import { fetchTopicCurationStates, getTopicCurationState } from '@/lib/topic-curation'
 import { fetchRelatedTopics } from '@/lib/topic-registry'
 import { fetchTopicSignalSummaries } from '@/lib/quality-signals'
 import { getRequestUser } from '@/lib/request-user'
@@ -36,6 +42,16 @@ export default async function TopicHubPage({ params }: Props) {
     notFound()
   }
 
+  const founder = isFounderEmail(user?.email)
+  const topicCurationState = getTopicCurationState(
+    await fetchTopicCurationStates([topic.topicKey]),
+    topic.topicKey
+  )
+
+  if (topicCurationState.hidden && !founder) {
+    notFound()
+  }
+
   const [{ waitingPrompts, relatedRooms }, signalMap, followedTopics, waitingCount, relatedTopics] = await Promise.all([
     fetchTopicHubData({
       topic,
@@ -59,6 +75,24 @@ export default async function TopicHubPage({ params }: Props) {
 
   const signalSummary = signalMap.get(topic.topicKey)
   const following = followedTopics.has(topic.topicKey)
+  const activityItems = buildTopicActivityFeed({
+    relatedRooms,
+    waitingPrompts,
+  }).slice(0, 6)
+
+  after(async () => {
+    if (!user) {
+      return
+    }
+
+    await trackAnalyticsEvent({
+      eventName: 'topic_hub_opened',
+      userId: user.id,
+      metadata: {
+        topicKey: topic.topicKey,
+      },
+    })
+  })
 
   return (
     <AppShell
@@ -76,6 +110,16 @@ export default async function TopicHubPage({ params }: Props) {
                 <span className="rounded-full bg-[var(--dae-accent-rose-soft)] px-3 py-1 text-xs font-medium text-[var(--dae-accent-rose)]">
                   {topic.label}
                 </span>
+                {topicCurationState.pinned ? (
+                  <span className="rounded-full bg-[var(--dae-accent-cool-soft)] px-3 py-1 text-xs font-medium text-[var(--dae-accent-cool)]">
+                    Pinned
+                  </span>
+                ) : null}
+                {topicCurationState.hidden ? (
+                  <span className="rounded-full bg-[var(--dae-surface)] px-3 py-1 text-xs font-medium text-[var(--dae-muted)]">
+                    Hidden from browse
+                  </span>
+                ) : null}
                 <span className="rounded-full bg-[var(--dae-surface)] px-3 py-1 text-xs font-medium text-[var(--dae-muted)]">
                   {topic.daeCount} {topic.daeCount === 1 ? 'idea' : 'ideas'}
                 </span>
@@ -161,6 +205,13 @@ export default async function TopicHubPage({ params }: Props) {
                 initialFollowing={following}
               />
             ) : null}
+            {founder ? (
+              <TopicCurationControls
+                topicKey={topic.topicKey}
+                initialHidden={topicCurationState.hidden}
+                initialPinned={topicCurationState.pinned}
+              />
+            ) : null}
           </div>
         </section>
 
@@ -215,6 +266,38 @@ export default async function TopicHubPage({ params }: Props) {
           </div>
 
           <div className="space-y-4">
+            <div className="rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-5 shadow-[0_14px_36px_rgba(32,26,22,0.05)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--dae-accent-cool)]">
+                Topic activity
+              </p>
+              <p className="mt-1 text-sm text-[var(--dae-muted)]">
+                The latest motion around this idea, across rooms and still-waiting prompts.
+              </p>
+
+              <div className="mt-4 space-y-2">
+                {activityItems.length === 0 ? (
+                  <div className="rounded-2xl bg-[var(--dae-surface)] px-4 py-4 text-sm text-[var(--dae-muted)]">
+                    Quiet right now.
+                  </div>
+                ) : (
+                  activityItems.map((item) => (
+                    <Link
+                      key={item.id}
+                      href={item.href}
+                      className="block rounded-2xl bg-[var(--dae-surface)] px-4 py-3 transition-colors hover:bg-white"
+                    >
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent-cool)]">
+                        {item.kind === 'room' ? 'Room activity' : 'Waiting prompt'}
+                      </p>
+                      <p className="mt-1 text-sm font-medium text-[var(--dae-ink)]">{item.title}</p>
+                      <p className="mt-1 text-xs leading-5 text-[var(--dae-muted)]">{item.detail}</p>
+                      <p className="mt-1 text-[11px] text-[var(--dae-muted)]">{formatTimestamp(item.timestamp)}</p>
+                    </Link>
+                  ))
+                )}
+              </div>
+            </div>
+
             <div className="rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-5 shadow-[0_14px_36px_rgba(32,26,22,0.05)]">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--dae-accent-rose)]">
                 Nearby topics

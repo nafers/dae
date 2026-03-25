@@ -1,0 +1,55 @@
+import { NextResponse } from 'next/server'
+import { trackAnalyticsEvent } from '@/lib/analytics'
+import { isFounderEmail } from '@/lib/founders'
+import { getRequestUser } from '@/lib/request-user'
+
+function sanitizeAction(value: unknown) {
+  if (value === 'hide' || value === 'unhide' || value === 'pin' || value === 'unpin') {
+    return value
+  }
+
+  return null
+}
+
+export async function POST(request: Request) {
+  try {
+    const user = await getRequestUser()
+    if (!user) {
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+    }
+
+    if (!isFounderEmail(user.email)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const payload = await request.json()
+    const topicKey = typeof payload?.topicKey === 'string' ? payload.topicKey : ''
+    const action = sanitizeAction(payload?.action)
+
+    if (!topicKey || !action) {
+      return NextResponse.json({ error: 'Missing topic details' }, { status: 400 })
+    }
+
+    const eventName =
+      action === 'hide'
+        ? 'topic_hidden'
+        : action === 'unhide'
+          ? 'topic_unhidden'
+          : action === 'pin'
+            ? 'topic_pinned'
+            : 'topic_unpinned'
+
+    await trackAnalyticsEvent({
+      eventName,
+      userId: user.id,
+      metadata: {
+        topicKey,
+      },
+    })
+
+    return NextResponse.json({ ok: true })
+  } catch (error) {
+    console.error('Unexpected topic curation route error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  }
+}

@@ -108,6 +108,15 @@ export default async function MetricsPage() {
   const followDigestSent = eventRows.filter((event) => event.event_name === 'topic_follow_digest_sent')
   const followDigestSkipped = eventRows.filter((event) => event.event_name === 'topic_follow_digest_skipped')
   const followDigestFailed = eventRows.filter((event) => event.event_name === 'topic_follow_digest_failed')
+  const topicHubOpened = eventRows.filter((event) => event.event_name === 'topic_hub_opened')
+  const inviteLandingOpened = eventRows.filter((event) => event.event_name === 'invite_landing_opened')
+  const topicFollowed = eventRows.filter((event) => event.event_name === 'topic_followed')
+  const topicHidden = eventRows.filter((event) => event.event_name === 'topic_hidden')
+  const topicPinned = eventRows.filter((event) => event.event_name === 'topic_pinned')
+  const moderatedRoomHidden = eventRows.filter((event) => event.event_name === 'moderation_room_hidden')
+  const moderatedRoomJoinsLocked = eventRows.filter(
+    (event) => event.event_name === 'moderation_room_join_locked'
+  )
   const mutedEvents = eventRows.filter((event) => event.event_name === 'thread_muted')
   const hiddenEvents = eventRows.filter((event) => event.event_name === 'thread_hidden')
   const reportedEvents = eventRows.filter((event) => event.event_name === 'thread_reported')
@@ -137,6 +146,11 @@ export default async function MetricsPage() {
   const activeThreads = messageCountsByThread.size
   const threadsWithThreePlusMessages = [...messageCountsByThread.values()].filter((count) => count >= 3).length
   const repliedThreads = [...sendersByThread.values()].filter((senders) => senders.size >= 2).length
+  const waitingWithRescueOptions = waitingEvents.filter((event) => {
+    const metadata = event.metadata as { nearRoomCount?: unknown; nearTopicCount?: unknown } | null
+
+    return Number(metadata?.nearRoomCount ?? 0) > 0 || Number(metadata?.nearTopicCount ?? 0) > 0
+  }).length
 
   const positiveFeedback = feedbackEvents.filter(
     (event) => (event.metadata as { verdict?: string } | null)?.verdict === 'good'
@@ -281,6 +295,29 @@ export default async function MetricsPage() {
               />
             </div>
 
+            <div className="mt-6 grid gap-4 lg:grid-cols-4">
+              <MetricCard
+                label="Topic hubs opened"
+                value={topicHubOpened.length}
+                detail={`${topicFollowed.length} follow events`}
+              />
+              <MetricCard
+                label="Invite landings"
+                value={inviteLandingOpened.length}
+                detail="Shared room links opened"
+              />
+              <MetricCard
+                label="Near-match saves"
+                value={waitingWithRescueOptions}
+                detail={`${formatPercent(waitingWithRescueOptions, Math.max(waitingEvents.length, 1))} of waiting prompts had rescue options`}
+              />
+              <MetricCard
+                label="Topic curation"
+                value={topicPinned.length + topicHidden.length}
+                detail={`${topicPinned.length} pinned, ${topicHidden.length} hidden`}
+              />
+            </div>
+
             <div className="mt-6 grid gap-4 lg:grid-cols-3">
               <MetricCard
                 label="Match quality"
@@ -314,6 +351,19 @@ export default async function MetricsPage() {
                 label="Reports"
                 value={reportedEvents.length}
                 detail="Signal on trust or bad-fit friction"
+              />
+            </div>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-2">
+              <MetricCard
+                label="Founder room controls"
+                value={moderatedRoomHidden.length}
+                detail={`${moderatedRoomJoinsLocked.length} rooms had joins paused`}
+              />
+              <MetricCard
+                label="Topic following"
+                value={topicFollowed.length}
+                detail={`${topicHubOpened.length} topic hub opens tracked`}
               />
             </div>
 

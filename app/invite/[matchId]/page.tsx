@@ -1,6 +1,8 @@
+import { after } from 'next/server'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { getRequestUser } from '@/lib/request-user'
+import { trackAnalyticsEvent } from '@/lib/analytics'
 import { fetchRoomModerationStates, getRoomModerationState } from '@/lib/moderation-state'
 import { getTopicPresentation } from '@/lib/topic-intelligence'
 import { fetchThreadDirectory } from '@/lib/thread-directory'
@@ -41,6 +43,16 @@ export default async function InvitePage({ params }: Props) {
   const presentation = await getTopicPresentation(daeTexts, {
     matchedCount: Math.max(thread.participantCount - 1, 0),
     forceAI: true,
+  })
+
+  after(async () => {
+    await trackAnalyticsEvent({
+      eventName: 'invite_landing_opened',
+      matchId,
+      metadata: {
+        topicKey: presentation.topicKey,
+      },
+    })
   })
 
   return (

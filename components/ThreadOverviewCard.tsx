@@ -1,4 +1,5 @@
 import { getParticipantTheme } from '@/lib/chat-theme'
+import { buildRoomSummary } from '@/lib/room-summary'
 import { ThreadDirectoryItem } from '@/lib/thread-directory'
 import { chooseRepresentativeText, getTopicLabel } from '@/lib/topic-label'
 
@@ -39,6 +40,7 @@ export default function ThreadOverviewCard({
   const metaChipClass = compact
     ? 'rounded-full bg-[var(--dae-surface)] px-2.5 py-1 text-[11px] font-medium text-[var(--dae-muted)]'
     : 'rounded-full bg-[var(--dae-surface)] px-3 py-1 text-xs font-medium text-[var(--dae-muted)]'
+  const roomSummary = buildRoomSummary(thread)
 
   return (
     <article className={`rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] ${cardPadding} shadow-[0_14px_36px_rgba(32,26,22,0.05)]`}>
@@ -121,10 +123,8 @@ export default function ThreadOverviewCard({
 
       {showLatestActivity && (
         <div className="mt-3 rounded-2xl bg-[var(--dae-surface)] px-3 py-3">
-          <p className={`${compact ? 'line-clamp-1 text-[13px] leading-5' : 'line-clamp-2 text-sm leading-6'} text-[var(--dae-muted)]`}>
-            <span className="font-medium text-[var(--dae-ink)]">{thread.lastMessageSenderLabel}</span>
-            {' '}
-            {thread.lastMessagePreview}
+          <p className={`${compact ? 'line-clamp-2 text-[13px] leading-5' : 'line-clamp-2 text-sm leading-6'} text-[var(--dae-muted)]`}>
+            {roomSummary}
           </p>
         </div>
       )}

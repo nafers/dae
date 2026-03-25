@@ -5,8 +5,7 @@ import BrowseTopics from '@/components/BrowseTopics'
 import { fetchTopicSignalSummaries } from '@/lib/quality-signals'
 import { getRequestUser } from '@/lib/request-user'
 import { createAdminClient } from '@/lib/supabase/server'
-import { fetchCachedBrowseTopics } from '@/lib/browse-directory'
-import { fetchActiveTopicFollows } from '@/lib/topic-follows'
+import { fetchTopicRegistry } from '@/lib/topic-registry'
 
 interface Props {
   searchParams: Promise<{
@@ -22,15 +21,15 @@ export default async function BrowsePage({ searchParams }: Props) {
   if (!user) redirect('/')
 
   const admin = createAdminClient()
-  const [{ count: waitingCount }, browseTopics, followedTopics] = await Promise.all([
+  const [{ count: waitingCount }, topicRegistry] = await Promise.all([
     admin
       .from('daes')
       .select('*', { count: 'exact', head: true })
       .eq('user_id', user.id)
       .eq('status', 'unmatched'),
-    fetchCachedBrowseTopics(),
-    fetchActiveTopicFollows(user.id),
+    fetchTopicRegistry(user.id),
   ])
+  const browseTopics = topicRegistry.items
   const topicSignalSummaries = await fetchTopicSignalSummaries({
     topicKeys: browseTopics.map((topic) => topic.topicKey),
     currentUserId: user.id,
@@ -44,8 +43,8 @@ export default async function BrowsePage({ searchParams }: Props) {
       title="Browse ideas"
       description={
         (waitingCount ?? 0) > 0
-          ? `Search ideas. ${followedTopics.size} following. Review to attach yours.`
-          : `Search the pool. ${followedTopics.size} following.`
+          ? `Search ideas. ${topicRegistry.followed.length} following. Review to attach yours.`
+          : `Search the pool. ${topicRegistry.followed.length} following.`
       }
       actions={
         <Link
@@ -65,7 +64,7 @@ export default async function BrowsePage({ searchParams }: Props) {
           topics={browseTopics}
           waitingCount={waitingCount ?? 0}
           initialQuery={initialQuery}
-          followedTopicKeys={[...followedTopics.keys()]}
+          followedTopicKeys={topicRegistry.followed.map((topic) => topic.topicKey)}
           signalSummaries={Object.fromEntries(topicSignalSummaries.entries())}
         />
       )}

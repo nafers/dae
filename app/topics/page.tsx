@@ -37,12 +37,17 @@ function TopicStrip({
             className="rounded-[24px] border border-[var(--dae-line)] bg-[var(--dae-surface)] p-4"
           >
             <div className="flex flex-wrap gap-2">
-              <span className="rounded-full bg-[var(--dae-accent-rose-soft)] px-3 py-1 text-xs font-medium text-[var(--dae-accent-rose)]">
-                {topic.label}
-              </span>
-              <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[var(--dae-muted)]">
-                {topic.daeCount} ideas
-              </span>
+                  <span className="rounded-full bg-[var(--dae-accent-rose-soft)] px-3 py-1 text-xs font-medium text-[var(--dae-accent-rose)]">
+                    {topic.label}
+                  </span>
+                  {topic.isPinned ? (
+                    <span className="rounded-full bg-[var(--dae-accent-cool-soft)] px-3 py-1 text-xs font-medium text-[var(--dae-accent-cool)]">
+                      Pinned
+                    </span>
+                  ) : null}
+                  <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[var(--dae-muted)]">
+                    {topic.daeCount} ideas
+                  </span>
               <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-[var(--dae-muted)]">
                 {topic.uniqueUserCount} people
               </span>

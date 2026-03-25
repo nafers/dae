@@ -1,4 +1,5 @@
 import AuthGate from '@/components/AuthGate'
+import { fetchEntryPreview } from '@/lib/entry-preview'
 import { getRequestUser } from '@/lib/request-user'
 import { redirect } from 'next/navigation'
 
@@ -29,6 +30,7 @@ export default async function Home({ searchParams }: Props) {
   if (user) {
     redirect(safeNext)
   }
+  const entryPreview = nextPath?.startsWith('/') ? await fetchEntryPreview(nextPath) : null
 
   return (
     <main className="flex min-h-screen items-center justify-center px-4 py-16">
@@ -46,6 +48,15 @@ export default async function Home({ searchParams }: Props) {
         </div>
 
         <div className="rounded-[32px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-6 shadow-[0_18px_40px_rgba(32,26,22,0.06)]">
+          {entryPreview ? (
+            <div className="mb-5 rounded-[24px] bg-[var(--dae-surface)] px-4 py-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent-cool)]">
+                {entryPreview.eyebrow}
+              </p>
+              <h2 className="mt-2 text-lg font-semibold text-[var(--dae-ink)]">{entryPreview.title}</h2>
+              <p className="mt-1 text-sm leading-6 text-[var(--dae-muted)]">{entryPreview.detail}</p>
+            </div>
+          ) : null}
           <AuthGate nextPath={safeNext} authError={authError} />
         </div>
       </div>
