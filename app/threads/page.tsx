@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation'
 import AppShell from '@/components/AppShell'
 import ShareButton from '@/components/ShareButton'
 import ThreadOverviewCard from '@/components/ThreadOverviewCard'
-import { isFounderEmail } from '@/lib/founders'
 import { getRequestUser } from '@/lib/request-user'
 import { fetchThreadDirectory } from '@/lib/thread-directory'
 
@@ -50,14 +49,6 @@ export default async function ThreadsPage({ searchParams }: Props) {
               className="rounded-full border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] shadow-sm hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
             >
               {showHidden ? 'Active rooms' : `Hidden ${hiddenCount}`}
-            </Link>
-          ) : null}
-          {isFounderEmail(user.email) ? (
-            <Link
-              href="/metrics"
-              className="rounded-full border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] shadow-sm hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
-            >
-              Metrics
             </Link>
           ) : null}
         </>
@@ -124,7 +115,7 @@ export default async function ThreadsPage({ searchParams }: Props) {
                 }
                 secondaryAction={
                   <ShareButton
-                    path={`/review?invite=${encodeURIComponent(thread.matchId)}`}
+                    path={`/invite/${encodeURIComponent(thread.matchId)}`}
                     title={`DAE room invite: ${thread.matchId.slice(0, 8)}`}
                     text="See if your DAE fits this room."
                     label="Invite"

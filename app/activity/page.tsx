@@ -3,7 +3,6 @@ import { redirect } from 'next/navigation'
 import AppShell from '@/components/AppShell'
 import ActivityFeed from '@/components/ActivityFeed'
 import { fetchActivityFeed } from '@/lib/activity'
-import { isFounderEmail } from '@/lib/founders'
 import { getRequestUser } from '@/lib/request-user'
 
 export default async function ActivityPage() {
@@ -19,16 +18,6 @@ export default async function ActivityPage() {
       eyebrow="Activity"
       title="Inbox"
       description={`${summary.totalCount} item${summary.totalCount === 1 ? '' : 's'} to check. ${summary.unreadCount} replies, ${summary.freshMatchCount} fresh room${summary.freshMatchCount === 1 ? '' : 's'}, ${summary.waitingCount} waiting.`}
-      actions={
-        isFounderEmail(user.email) ? (
-          <Link
-            href="/metrics"
-            className="rounded-full border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] shadow-sm hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
-          >
-            Metrics
-          </Link>
-        ) : undefined
-      }
     >
       {items.length === 0 ? (
         <div className="rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-8 text-center shadow-[0_14px_36px_rgba(32,26,22,0.05)]">

@@ -1,6 +1,7 @@
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
 import OpenAI from 'openai'
 import { generateHandle } from '@/lib/handles'
+import { sendTopicFollowDigest } from '@/lib/follow-notifications'
 import { trackAnalyticsEvent } from '@/lib/analytics'
 import { getRequestUser } from '@/lib/request-user'
 import { createAdminClient } from '@/lib/supabase/server'
@@ -62,6 +63,15 @@ export async function POST(request: Request) {
     }
 
     if (!matches || matches.length === 0) {
+      after(async () => {
+        await sendTopicFollowDigest({
+          submitterId: user.id,
+          daeId: newDae.id,
+          daeText: trimmed,
+          status: 'unmatched',
+        })
+      })
+
       await trackAnalyticsEvent({
         eventName: 'dae_waiting',
         userId: user.id,
@@ -153,18 +163,28 @@ export async function POST(request: Request) {
       },
     })
 
-    await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/notify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        matchId,
-        userAId: user.id,
-        userBId: matchedDae.user_id,
-        handleA,
-        handleB,
-        daeAText: trimmed,
-        daeBText: bestMatch.text,
-      }),
+    after(async () => {
+      await Promise.allSettled([
+        fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/notify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            matchId,
+            userAId: user.id,
+            userBId: matchedDae.user_id,
+            handleA,
+            handleB,
+            daeAText: trimmed,
+            daeBText: bestMatch.text,
+          }),
+        }),
+        sendTopicFollowDigest({
+          submitterId: user.id,
+          daeId: newDae.id,
+          daeText: trimmed,
+          status: 'matched',
+        }),
+      ])
     })
 
     return NextResponse.json({ status: 'matched', matchId })

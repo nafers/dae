@@ -5,10 +5,12 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { getHandleInitial, getParticipantTheme } from '@/lib/chat-theme'
+import type { RoomSignalType } from '@/lib/quality-signals'
 import type { ThreadJoinRequest } from '@/lib/thread-join-requests'
 import ChatInput from './ChatInput'
 import JoinRequestsPanel from './JoinRequestsPanel'
 import MatchFeedbackPrompt from './MatchFeedbackPrompt'
+import RoomSignalBar from './RoomSignalBar'
 import ShareButton from './ShareButton'
 import ThreadExitControls from './ThreadExitControls'
 
@@ -40,6 +42,11 @@ interface Props {
   threadSummary: string
   supportingDaes: string[]
   initialJoinRequests: ThreadJoinRequest[]
+  initialRoomSignalSummary: {
+    usefulCount: number
+    notQuiteCount: number
+    mySignal: RoomSignalType | null
+  }
 }
 
 function orderParticipants(participants: Participant[], myUserId: string) {
@@ -63,6 +70,7 @@ export default function ChatThread({
   threadSummary,
   supportingDaes,
   initialJoinRequests,
+  initialRoomSignalSummary,
 }: Props) {
   const [participants, setParticipants] = useState<Participant[]>(
     orderParticipants(initialParticipants, myUserId)
@@ -393,7 +401,7 @@ export default function ChatThread({
               All chats
             </Link>
             <ShareButton
-              path={`/review?invite=${encodeURIComponent(matchId)}`}
+              path={`/invite/${encodeURIComponent(matchId)}`}
               title={`DAE room: ${threadTopicLabel}`}
               text={`See if your DAE fits: ${threadHeadline}`}
               label="Invite"
@@ -426,6 +434,24 @@ export default function ChatThread({
         <JoinRequestsPanel matchId={matchId} initialRequests={initialJoinRequests} />
 
         <div className="mt-3">
+          <div className="mb-3 rounded-2xl bg-[var(--dae-surface)] px-3 py-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent-cool)]">
+                Room signal
+              </p>
+              <p className="text-xs text-[var(--dae-muted)]">Does this room actually work?</p>
+            </div>
+            <div className="mt-3">
+              <RoomSignalBar
+                matchId={matchId}
+                initialCounts={{
+                  usefulCount: initialRoomSignalSummary.usefulCount,
+                  notQuiteCount: initialRoomSignalSummary.notQuiteCount,
+                }}
+                initialSignal={initialRoomSignalSummary.mySignal}
+              />
+            </div>
+          </div>
           <ThreadExitControls
             matchId={matchId}
             initialMuted={initialThreadState.muted}

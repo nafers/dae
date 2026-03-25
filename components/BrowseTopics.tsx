@@ -3,8 +3,10 @@
 import Link from 'next/link'
 import { useDeferredValue, useEffect, useState } from 'react'
 import { BrowseTopicItem } from '@/lib/browse-directory'
+import type { TopicSignalType } from '@/lib/quality-signals'
 import FollowTopicButton from './FollowTopicButton'
 import ShareButton from './ShareButton'
+import TopicSignalBar from './TopicSignalBar'
 
 type BrowseSort = 'trending' | 'new' | 'waiting'
 type BrowseFilter = 'all' | 'trending' | 'waiting' | 'connected' | 'fresh'
@@ -14,6 +16,14 @@ interface Props {
   waitingCount: number
   initialQuery?: string
   followedTopicKeys?: string[]
+  signalSummaries?: Record<
+    string,
+    {
+      sameHereCount: number
+      notForMeCount: number
+      mySignal: TopicSignalType | null
+    }
+  >
 }
 
 const sortOptions: Array<{ key: BrowseSort; label: string }> = [
@@ -60,6 +70,7 @@ export default function BrowseTopics({
   waitingCount,
   initialQuery = '',
   followedTopicKeys = [],
+  signalSummaries = {},
 }: Props) {
   const [query, setQuery] = useState(initialQuery)
   const [sort, setSort] = useState<BrowseSort>('trending')
@@ -226,7 +237,7 @@ export default function BrowseTopics({
           {filteredTopics.map((topic) => (
             <article
               key={topic.id}
-              className="rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-5 shadow-[0_14px_36px_rgba(32,26,22,0.05)]"
+              className="rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-4 shadow-[0_14px_36px_rgba(32,26,22,0.05)] md:p-5"
             >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex flex-wrap gap-2">
@@ -298,6 +309,19 @@ export default function BrowseTopics({
                   ))}
                 </div>
               ) : null}
+
+              <div className="mt-4">
+                <TopicSignalBar
+                  topicKey={topic.topicKey}
+                  headline={topic.headline}
+                  label={topic.label}
+                  initialCounts={{
+                    sameHereCount: signalSummaries[topic.topicKey]?.sameHereCount ?? 0,
+                    notForMeCount: signalSummaries[topic.topicKey]?.notForMeCount ?? 0,
+                  }}
+                  initialSignal={signalSummaries[topic.topicKey]?.mySignal ?? null}
+                />
+              </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
                 <Link

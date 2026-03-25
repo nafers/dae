@@ -2,7 +2,6 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import AppShell from '@/components/AppShell'
 import SubmitForm from '@/components/SubmitForm'
-import { isFounderEmail } from '@/lib/founders'
 import { getRequestUser } from '@/lib/request-user'
 import { createAdminClient } from '@/lib/supabase/server'
 
@@ -31,16 +30,6 @@ export default async function SubmitPage({ searchParams }: Props) {
       activeTab="submit"
       userEmail={user.email ?? ''}
       title="Does anyone else?"
-      actions={
-        isFounderEmail(user.email) ? (
-          <Link
-            href="/metrics"
-            className="rounded-full border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] shadow-sm hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
-          >
-            Metrics
-          </Link>
-        ) : undefined
-      }
     >
       <div className="space-y-4">
         <section className="flex flex-col gap-3 rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-4 shadow-[0_14px_36px_rgba(32,26,22,0.05)] lg:flex-row lg:items-center lg:justify-between">

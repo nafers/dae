@@ -105,9 +105,16 @@ export default async function MetricsPage() {
   const messageEmailSent = eventRows.filter((event) => event.event_name === 'message_email_sent')
   const messageEmailSkipped = eventRows.filter((event) => event.event_name === 'message_email_skipped')
   const messageEmailFailed = eventRows.filter((event) => event.event_name === 'message_email_failed')
+  const followDigestSent = eventRows.filter((event) => event.event_name === 'topic_follow_digest_sent')
+  const followDigestSkipped = eventRows.filter((event) => event.event_name === 'topic_follow_digest_skipped')
+  const followDigestFailed = eventRows.filter((event) => event.event_name === 'topic_follow_digest_failed')
   const mutedEvents = eventRows.filter((event) => event.event_name === 'thread_muted')
   const hiddenEvents = eventRows.filter((event) => event.event_name === 'thread_hidden')
   const reportedEvents = eventRows.filter((event) => event.event_name === 'thread_reported')
+  const topicSameHereEvents = eventRows.filter((event) => event.event_name === 'topic_signal_same_here')
+  const topicNotForMeEvents = eventRows.filter((event) => event.event_name === 'topic_signal_not_for_me')
+  const roomUsefulEvents = eventRows.filter((event) => event.event_name === 'room_signal_useful')
+  const roomNotQuiteEvents = eventRows.filter((event) => event.event_name === 'room_signal_not_quite')
 
   const totalDaes = daeRows.length
   const waitingDaes = daeRows.filter((dae) => dae.status === 'unmatched').length
@@ -171,6 +178,12 @@ export default async function MetricsPage() {
               className="rounded-full border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-4 py-2 text-sm font-medium text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
             >
               Chats
+            </Link>
+            <Link
+              href="/moderation"
+              className="rounded-full border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-4 py-2 text-sm font-medium text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
+            >
+              Moderation
             </Link>
           </div>
         </div>
@@ -262,9 +275,27 @@ export default async function MetricsPage() {
                 detail={`${messageEmailSkipped.length} skipped, ${messageEmailFailed.length} failed`}
               />
               <MetricCard
+                label="Follow digests"
+                value={followDigestSent.length}
+                detail={`${followDigestSkipped.length} skipped, ${followDigestFailed.length} failed`}
+              />
+            </div>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-3">
+              <MetricCard
                 label="Match quality"
                 value={feedbackEvents.length}
                 detail={`${positiveFeedback} good, ${negativeFeedback} weak`}
+              />
+              <MetricCard
+                label="Topic signals"
+                value={topicSameHereEvents.length}
+                detail={`${topicNotForMeEvents.length} not-for-me taps`}
+              />
+              <MetricCard
+                label="Room signals"
+                value={roomUsefulEvents.length}
+                detail={`${roomNotQuiteEvents.length} not-quite taps`}
               />
             </div>
 

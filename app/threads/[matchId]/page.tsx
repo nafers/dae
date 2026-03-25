@@ -1,10 +1,9 @@
 import { after } from 'next/server'
 import { redirect, notFound } from 'next/navigation'
-import Link from 'next/link'
 import AppShell from '@/components/AppShell'
 import ChatThread from '@/components/ChatThread'
 import { trackAnalyticsEvent } from '@/lib/analytics'
-import { isFounderEmail } from '@/lib/founders'
+import { fetchRoomSignalSummary } from '@/lib/quality-signals'
 import { getRequestUser } from '@/lib/request-user'
 import { createAdminClient } from '@/lib/supabase/server'
 import { fetchPendingJoinRequestsForMatch } from '@/lib/thread-join-requests'
@@ -88,7 +87,14 @@ export default async function ThreadPage({ params }: Props) {
   ]
 
   const daeTexts = uniqueTexts(orderedParticipants.map((participant) => participant.dae))
-  const [{ data: initialMessages }, { data: feedbackEvent }, threadStateMap, topicPresentation, joinRequests] =
+  const [
+    { data: initialMessages },
+    { data: feedbackEvent },
+    threadStateMap,
+    topicPresentation,
+    joinRequests,
+    roomSignalSummary,
+  ] =
     await Promise.all([
       admin
         .from('messages')
@@ -114,6 +120,10 @@ export default async function ThreadPage({ params }: Props) {
         forceAI: true,
       }),
       fetchPendingJoinRequestsForMatch(matchId),
+      fetchRoomSignalSummary({
+        matchId,
+        currentUserId: user.id,
+      }),
     ])
 
   const initialThreadState = getThreadUserState(threadStateMap, user.id, matchId)
@@ -145,16 +155,6 @@ export default async function ThreadPage({ params }: Props) {
       title={threadHeadline}
       description={`${threadSummary} | Room ${matchId.slice(0, 8)} | ${orderedParticipants.length} ${orderedParticipants.length === 1 ? 'person' : 'people'}`}
       compact
-      actions={
-        isFounderEmail(user.email) ? (
-          <Link
-            href="/metrics"
-            className="rounded-full border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] shadow-sm hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
-          >
-            Metrics
-          </Link>
-        ) : undefined
-      }
     >
       <ChatThread
         matchId={matchId}
@@ -168,6 +168,7 @@ export default async function ThreadPage({ params }: Props) {
         threadSummary={threadSummary}
         supportingDaes={supportingDaes}
         initialJoinRequests={joinRequests}
+        initialRoomSignalSummary={roomSignalSummary}
       />
     </AppShell>
   )

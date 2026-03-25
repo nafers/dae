@@ -4,7 +4,6 @@ import AppShell from '@/components/AppShell'
 import JoinThreadControl from '@/components/JoinThreadControl'
 import ThreadOverviewCard from '@/components/ThreadOverviewCard'
 import WaitingDaesList from '@/components/WaitingDaesList'
-import { isFounderEmail } from '@/lib/founders'
 import { fetchJoinRequestStatesForUser } from '@/lib/thread-join-requests'
 import { getRequestUser } from '@/lib/request-user'
 import { scoreThreadAttachmentFit } from '@/lib/thread-fit'
@@ -131,16 +130,6 @@ export default async function ReviewPage({ searchParams }: Props) {
       eyebrow="Review"
       title="Waiting"
       description={focusedTopic ? `Attach or remove. Focused on: ${focusedTopic}` : 'Attach or remove.'}
-      actions={
-        isFounderEmail(user.email) ? (
-          <Link
-            href="/metrics"
-            className="rounded-full border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] shadow-sm hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
-          >
-            Metrics
-          </Link>
-        ) : undefined
-      }
     >
       {typedWaitingDaes.length === 0 ? (
         <div className="rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-8 text-center shadow-[0_14px_36px_rgba(32,26,22,0.05)]">
