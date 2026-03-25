@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 
 interface Props {
@@ -16,6 +16,15 @@ interface Props {
 
 type ExitMode = 'leave' | 'detach'
 type ThreadAction = 'mute' | 'unmute' | 'hide' | 'unhide' | 'report'
+
+interface RemovalVoteSummary {
+  targetUserId: string
+  targetHandle: string
+  daeId: string
+  votesCount: number
+  threshold: number
+  myVote: boolean
+}
 
 const reportReasons = [
   { value: 'not-a-fit', label: 'Not a fit' },
@@ -40,7 +49,55 @@ export default function ThreadExitControls({
   const [reportReason, setReportReason] = useState(reportReasons[0]?.value ?? 'not-a-fit')
   const [blockedUserIds, setBlockedUserIds] = useState(initialBlockedUserIds)
   const [selectedBlockUserId, setSelectedBlockUserId] = useState(otherParticipants[0]?.userId ?? '')
+  const [selectedRemovalUserId, setSelectedRemovalUserId] = useState(otherParticipants[0]?.userId ?? '')
   const [blocking, setBlocking] = useState(false)
+  const [removalVoteSummaries, setRemovalVoteSummaries] = useState<RemovalVoteSummary[]>([])
+  const [votingRemoval, setVotingRemoval] = useState(false)
+
+  useEffect(() => {
+    setSelectedBlockUserId((current) =>
+      current && otherParticipants.some((participant) => participant.userId === current)
+        ? current
+        : (otherParticipants[0]?.userId ?? '')
+    )
+    setSelectedRemovalUserId((current) =>
+      current && otherParticipants.some((participant) => participant.userId === current)
+        ? current
+        : (otherParticipants[0]?.userId ?? '')
+    )
+  }, [otherParticipants])
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadRemovalVotes() {
+      if (otherParticipants.length <= 1) {
+        if (isMounted) {
+          setRemovalVoteSummaries([])
+        }
+        return
+      }
+
+      try {
+        const response = await fetch(`/api/thread-removal-votes?matchId=${encodeURIComponent(matchId)}`, {
+          cache: 'no-store',
+        })
+        const data = await response.json()
+
+        if (isMounted && response.ok && Array.isArray(data?.items)) {
+          setRemovalVoteSummaries(data.items as RemovalVoteSummary[])
+        }
+      } catch {
+        // Quiet fallback. Core room controls still work.
+      }
+    }
+
+    void loadRemovalVotes()
+
+    return () => {
+      isMounted = false
+    }
+  }, [matchId, otherParticipants.length])
 
   async function submitExit(mode: ExitMode) {
     if (pendingMode || pendingAction) return
@@ -162,7 +219,55 @@ export default function ThreadExitControls({
     }
   }
 
+  async function submitRemovalVote() {
+    if (
+      !selectedRemovalUserId ||
+      pendingMode !== null ||
+      pendingAction !== null ||
+      blocking ||
+      votingRemoval
+    ) {
+      return
+    }
+
+    setVotingRemoval(true)
+    setError('')
+
+    try {
+      const response = await fetch('/api/thread-removal-votes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          matchId,
+          targetUserId: selectedRemovalUserId,
+        }),
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(typeof data?.error === 'string' ? data.error : 'Unable to register this vote.')
+      }
+
+      if (Array.isArray(data?.summary?.items)) {
+        setRemovalVoteSummaries(data.summary.items as RemovalVoteSummary[])
+      }
+
+      if (data?.removed) {
+        router.refresh()
+      }
+    } catch (voteError) {
+      setError(voteError instanceof Error ? voteError.message : 'Unable to register this vote.')
+    } finally {
+      setVotingRemoval(false)
+    }
+  }
+
   const selectedBlocked = blockedUserIds.includes(selectedBlockUserId)
+  const selectedRemovalSummary = removalVoteSummaries.find(
+    (summary) => summary.targetUserId === selectedRemovalUserId
+  )
 
   return (
     <div className="space-y-3 rounded-2xl bg-[var(--dae-surface)] px-3 py-3">
@@ -286,6 +391,71 @@ export default function ThreadExitControls({
           <p className="text-xs text-[var(--dae-muted)]">
             Block hides this room and removes future suggestions with that person.
           </p>
+        </div>
+      ) : null}
+
+      {otherParticipants.length > 1 ? (
+        <div className="space-y-2 rounded-2xl border border-[var(--dae-accent-warm)]/35 bg-white/75 px-3 py-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent-warm)]">
+              Vote to remove
+            </p>
+            <p className="mt-1 text-xs text-[var(--dae-muted)]">
+              Only for rooms with 3+ people. Enough votes removes that person, deletes their messages here, and reopens their DAE elsewhere.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={selectedRemovalUserId}
+              onChange={(event) => setSelectedRemovalUserId(event.target.value)}
+              disabled={pendingMode !== null || pendingAction !== null || blocking || votingRemoval}
+              className="rounded-full border border-[var(--dae-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-ink)] focus:border-[var(--dae-accent-warm)] focus:outline-none disabled:opacity-50"
+            >
+              {otherParticipants.map((participant) => (
+                <option key={participant.userId} value={participant.userId}>
+                  {participant.handle}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={() => void submitRemovalVote()}
+              disabled={
+                !selectedRemovalUserId ||
+                pendingMode !== null ||
+                pendingAction !== null ||
+                blocking ||
+                votingRemoval ||
+                Boolean(selectedRemovalSummary?.myVote)
+              }
+              className="rounded-full border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] px-3 py-1.5 text-xs font-medium text-[var(--dae-accent-warm)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {votingRemoval
+                ? 'Voting...'
+                : selectedRemovalSummary?.myVote
+                  ? 'Voted'
+                  : 'Vote to remove'}
+            </button>
+            <p className="text-xs text-[var(--dae-muted)]">
+              {selectedRemovalSummary
+                ? `${selectedRemovalSummary.votesCount}/${selectedRemovalSummary.threshold} votes so far.`
+                : 'Needs 2+ votes depending on room size.'}
+            </p>
+          </div>
+
+          {removalVoteSummaries.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {removalVoteSummaries.map((summary) => (
+                <span
+                  key={summary.targetUserId}
+                  className="rounded-full border border-[var(--dae-line)] bg-[var(--dae-surface)] px-3 py-1 text-[11px] font-medium text-[var(--dae-muted)]"
+                >
+                  {summary.targetHandle}: {summary.votesCount}/{summary.threshold}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
 

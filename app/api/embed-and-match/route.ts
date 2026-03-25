@@ -86,6 +86,18 @@ export async function POST(request: Request) {
         },
       })
 
+      if (nearMatches.nearRooms.length > 0 || nearMatches.nearTopics.length > 0) {
+        await trackAnalyticsEvent({
+          eventName: 'near_match_options_presented',
+          userId: user.id,
+          daeId: newDae.id,
+          metadata: {
+            nearRoomIds: nearMatches.nearRooms.map((room) => room.matchId),
+            nearTopicKeys: nearMatches.nearTopics.map((topic) => topic.topicKey),
+          },
+        })
+      }
+
       return NextResponse.json({
         status: 'waiting',
         daeId: newDae.id,

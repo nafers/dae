@@ -212,6 +212,12 @@ export default function SubmitForm({ initialText = '', initialInviteMatchId = ''
         ) : null}
 
         <div className="flex flex-wrap gap-2">
+          <Link
+            href="/now"
+            className="rounded-full border border-[var(--dae-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-ink)] hover:border-[var(--dae-muted)]"
+          >
+            Now
+          </Link>
           <button
             type="button"
             onClick={() => {

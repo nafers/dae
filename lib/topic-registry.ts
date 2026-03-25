@@ -1,4 +1,5 @@
 import { fetchCachedBrowseTopics, type BrowseTopicItem } from '@/lib/browse-directory'
+import { fetchTopicAliasMap, resolveTopicAlias } from '@/lib/topic-aliases'
 import { fetchTopicCurationStates, getTopicCurationState } from '@/lib/topic-curation'
 import { fetchActiveTopicFollows } from '@/lib/topic-follows'
 import { scoreTextPair } from '@/lib/text-similarity'
@@ -7,6 +8,7 @@ export interface TopicRegistryItem extends BrowseTopicItem {
   isFollowed: boolean
   isPinned: boolean
   relatedTopicKeys: string[]
+  canonicalTopicKey: string
 }
 
 function scoreTopicRelation(source: BrowseTopicItem, candidate: BrowseTopicItem) {
@@ -23,12 +25,14 @@ function scoreTopicRelation(source: BrowseTopicItem, candidate: BrowseTopicItem)
 
 export async function fetchTopicRegistry(currentUserId?: string | null) {
   const topics = await fetchCachedBrowseTopics()
-  const [followedTopics, curationStates] = await Promise.all([
+  const [followedTopics, curationStates, aliasMap] = await Promise.all([
     currentUserId ? fetchActiveTopicFollows(currentUserId) : Promise.resolve(new Map()),
     fetchTopicCurationStates(topics.map((topic) => topic.topicKey)),
+    fetchTopicAliasMap(),
   ])
 
   const items = topics.map((topic) => {
+    const canonicalTopicKey = resolveTopicAlias(topic.topicKey, aliasMap)
     const curation = getTopicCurationState(curationStates, topic.topicKey)
     const relatedTopicKeys = topics
       .filter((candidate) => candidate.topicKey !== topic.topicKey)
@@ -46,10 +50,15 @@ export async function fetchTopicRegistry(currentUserId?: string | null) {
       isFollowed: followedTopics.has(topic.topicKey),
       isPinned: curation.pinned,
       relatedTopicKeys,
+      canonicalTopicKey,
     } satisfies TopicRegistryItem
   })
   const visibleItems = items
-    .filter((topic) => !getTopicCurationState(curationStates, topic.topicKey).hidden)
+    .filter(
+      (topic) =>
+        topic.canonicalTopicKey === topic.topicKey &&
+        !getTopicCurationState(curationStates, topic.topicKey).hidden
+    )
     .sort((a, b) => {
       if (a.isPinned !== b.isPinned) {
         return a.isPinned ? -1 : 1

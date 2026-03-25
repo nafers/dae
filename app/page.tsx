@@ -16,7 +16,7 @@ export default async function Home({ searchParams }: Props) {
   const authCode = Array.isArray(code) ? code[0] : code
   const authError = Array.isArray(error) ? error[0] : error
   const nextPath = Array.isArray(next) ? next[0] : next
-  const safeNext = nextPath?.startsWith('/') ? nextPath : '/submit'
+  const safeNext = nextPath?.startsWith('/') ? nextPath : '/now'
 
   if (authCode) {
     const callbackParams = new URLSearchParams({ code: authCode })

@@ -4,7 +4,15 @@ import TestAccountSwitcher from '@/components/TestAccountSwitcher'
 import { isFounderEmail } from '@/lib/founders'
 import { canUseTestSwitcher, getTestAccountEmails } from '@/lib/test-accounts'
 
-type AppTab = 'submit' | 'review' | 'threads' | 'browse' | 'activity' | 'settings' | 'moderation'
+type AppTab =
+  | 'now'
+  | 'submit'
+  | 'review'
+  | 'threads'
+  | 'browse'
+  | 'activity'
+  | 'settings'
+  | 'moderation'
 
 interface Props {
   activeTab: AppTab
@@ -18,6 +26,7 @@ interface Props {
 }
 
 const tabs: Array<{ key: AppTab; href: string; label: string }> = [
+  { key: 'now', href: '/now', label: 'Now' },
   { key: 'submit', href: '/submit', label: 'Submit' },
   { key: 'review', href: '/review', label: 'Review' },
   { key: 'threads', href: '/threads', label: 'Chats' },
@@ -30,6 +39,11 @@ const mobileTabs: Array<{ key: AppTab; href: string; label: string }> = [
 ]
 
 const tabStyles: Record<AppTab, { active: string; accent: string }> = {
+  now: {
+    active:
+      'border border-[var(--dae-accent)] bg-[var(--dae-accent-soft)] text-[var(--dae-accent)] shadow-[0_10px_24px_rgba(20,108,103,0.12)]',
+    accent: 'text-[var(--dae-accent)]',
+  },
   submit: {
     active:
       'border border-[var(--dae-accent)] bg-[var(--dae-accent-soft)] text-[var(--dae-accent)] shadow-[0_10px_24px_rgba(20,108,103,0.12)]',
@@ -89,7 +103,7 @@ export default function AppShell({
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3">
               <Link
-                href="/submit"
+                href="/now"
                 className="rounded-full border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-[var(--dae-ink)] shadow-sm"
               >
                 DAE
@@ -145,7 +159,7 @@ export default function AppShell({
             </div>
           </div>
 
-          <nav className="hidden grid-cols-4 gap-2 md:grid">
+          <nav className="hidden grid-cols-5 gap-2 md:grid">
             {tabs.map((tab) => {
               const isActive = tab.key === activeTab
 
@@ -201,7 +215,7 @@ export default function AppShell({
 
       {accountReady ? (
         <nav className="fixed inset-x-3 bottom-3 z-30 rounded-[28px] border border-[var(--dae-line)] bg-[rgba(255,250,244,0.96)] p-2 shadow-[0_18px_40px_rgba(32,26,22,0.12)] backdrop-blur-xl md:hidden">
-          <div className="grid grid-cols-5 gap-2">
+          <div className="grid grid-cols-6 gap-2">
             {mobileTabs.map((tab) => {
               const isActive = tab.key === activeTab
 

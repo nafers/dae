@@ -4,7 +4,14 @@ import { isFounderEmail } from '@/lib/founders'
 import { getRequestUser } from '@/lib/request-user'
 
 function sanitizeAction(value: unknown) {
-  if (value === 'hide' || value === 'unhide' || value === 'pin' || value === 'unpin') {
+  if (
+    value === 'hide' ||
+    value === 'unhide' ||
+    value === 'pin' ||
+    value === 'unpin' ||
+    value === 'set_alias' ||
+    value === 'clear_alias'
+  ) {
     return value
   }
 
@@ -25,6 +32,8 @@ export async function POST(request: Request) {
     const payload = await request.json()
     const topicKey = typeof payload?.topicKey === 'string' ? payload.topicKey : ''
     const action = sanitizeAction(payload?.action)
+    const targetTopicKey =
+      typeof payload?.targetTopicKey === 'string' ? payload.targetTopicKey : null
 
     if (!topicKey || !action) {
       return NextResponse.json({ error: 'Missing topic details' }, { status: 400 })
@@ -37,13 +46,23 @@ export async function POST(request: Request) {
           ? 'topic_unhidden'
           : action === 'pin'
             ? 'topic_pinned'
-            : 'topic_unpinned'
+            : action === 'unpin'
+              ? 'topic_unpinned'
+              : action === 'set_alias'
+                ? 'topic_alias_set'
+                : 'topic_alias_cleared'
+
+    if (action === 'set_alias' && (!targetTopicKey || targetTopicKey === topicKey)) {
+      return NextResponse.json({ error: 'Choose a different target topic' }, { status: 400 })
+    }
 
     await trackAnalyticsEvent({
       eventName,
       userId: user.id,
       metadata: {
         topicKey,
+        sourceTopicKey: topicKey,
+        targetTopicKey,
       },
     })
 

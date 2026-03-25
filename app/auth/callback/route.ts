@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   const tokenHash = requestUrl.searchParams.get('token_hash')
   const type = requestUrl.searchParams.get('type')
   const nextPath = requestUrl.searchParams.get('next')
-  const safeNext = nextPath?.startsWith('/') ? nextPath : '/submit'
+  const safeNext = nextPath?.startsWith('/') ? nextPath : '/now'
 
   if (code || (tokenHash && isEmailOtpType(type))) {
     const cookieStore = await cookies()

@@ -14,7 +14,7 @@ async function getAuthedParticipant(matchId: string) {
   const admin = createAdminClient()
   const { data: participant } = await admin
     .from('thread_participants')
-    .select('id')
+    .select('id, dae_id')
     .eq('match_id', matchId)
     .eq('user_id', user.id)
     .maybeSingle()
@@ -31,7 +31,7 @@ async function getAuthedParticipant(matchId: string) {
     }
   }
 
-  return { admin, user }
+  return { admin, user, participant }
 }
 
 export async function GET(request: Request) {
@@ -90,7 +90,8 @@ export async function POST(request: Request) {
       return access.error
     }
 
-    const { admin, user } = access
+    const { admin, user, participant } = access
+    const participantDaeId = participant?.dae_id ?? null
     const [{ count: existingMessageCount }, { count: existingSenderMessageCount }] = await Promise.all([
       admin.from('messages').select('*', { count: 'exact', head: true }).eq('match_id', matchId),
       admin
@@ -116,6 +117,18 @@ export async function POST(request: Request) {
     }
 
     after(async () => {
+      const attachmentEvent =
+        participantDaeId
+          ? await admin
+              .from('analytics_events')
+              .select('id')
+              .eq('event_name', 'dae_attached_to_thread')
+              .eq('match_id', matchId)
+              .eq('dae_id', participantDaeId)
+              .limit(1)
+              .maybeSingle()
+          : { data: null }
+
       await Promise.allSettled([
         trackAnalyticsEvents([
           {
@@ -141,6 +154,19 @@ export async function POST(request: Request) {
                   eventName: 'first_message_from_user_in_thread',
                   userId: user.id,
                   matchId,
+                },
+              ]
+            : []),
+          ...(attachmentEvent.data && existingSenderMessageCount === 0
+            ? [
+                {
+                  eventName: 'attached_user_first_message',
+                  userId: user.id,
+                  matchId,
+                  daeId: participantDaeId,
+                  metadata: {
+                    existingMessageCount,
+                  },
                 },
               ]
             : []),

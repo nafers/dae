@@ -1,4 +1,4 @@
-import { fetchTopicByKey } from '@/lib/topic-hubs'
+import { fetchTopicByKey, resolveTopicKey } from '@/lib/topic-hubs'
 import { chooseRepresentativeText } from '@/lib/topic-label'
 import { fetchThreadDirectory } from '@/lib/thread-directory'
 
@@ -12,6 +12,10 @@ function parseInviteMatchId(nextPath: string) {
   try {
     const url = new URL(nextPath, 'https://dae.local')
 
+    if (url.pathname.startsWith('/invite/')) {
+      return url.pathname.replace('/invite/', '').split('/')[0] ?? null
+    }
+
     return url.searchParams.get('invite')
   } catch {
     return null
@@ -21,7 +25,8 @@ function parseInviteMatchId(nextPath: string) {
 export async function fetchEntryPreview(nextPath: string) {
   if (nextPath.startsWith('/topics/')) {
     const topicKey = nextPath.replace('/topics/', '').split('?')[0]
-    const topic = await fetchTopicByKey(decodeURIComponent(topicKey))
+    const resolvedTopicKey = await resolveTopicKey(decodeURIComponent(topicKey))
+    const topic = await fetchTopicByKey(resolvedTopicKey)
 
     if (!topic) {
       return null

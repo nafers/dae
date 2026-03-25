@@ -4,7 +4,9 @@ import { notFound, redirect } from 'next/navigation'
 import { getRequestUser } from '@/lib/request-user'
 import { trackAnalyticsEvent } from '@/lib/analytics'
 import { fetchRoomModerationStates, getRoomModerationState } from '@/lib/moderation-state'
+import { scoreThreadAttachmentFit } from '@/lib/thread-fit'
 import { getTopicPresentation } from '@/lib/topic-intelligence'
+import { createAdminClient } from '@/lib/supabase/server'
 import { fetchThreadDirectory } from '@/lib/thread-directory'
 
 interface Props {
@@ -17,14 +19,11 @@ export default async function InvitePage({ params }: Props) {
   const { matchId } = await params
   const user = await getRequestUser()
 
-  if (user) {
-    redirect(`/review?invite=${matchId}`)
-  }
-
   const [thread] = await fetchThreadDirectory({
-    currentUserId: '__guest__',
+    currentUserId: user?.id ?? '__guest__',
     scope: 'all',
-    includeState: false,
+    includeState: Boolean(user),
+    includeEmbeddings: Boolean(user),
     matchIds: [matchId],
     limit: 1,
   })
@@ -44,6 +43,47 @@ export default async function InvitePage({ params }: Props) {
     matchedCount: Math.max(thread.participantCount - 1, 0),
     forceAI: true,
   })
+
+  if (user) {
+    const roomTarget = `/review?invite=${matchId}&matchId=${matchId}`
+
+    if (moderationState.joinLocked) {
+      redirect(`/topics/${encodeURIComponent(presentation.topicKey)}`)
+    }
+
+    const admin = createAdminClient()
+    const { data: waitingDaes } = await admin
+      .from('daes')
+      .select('id, text, embedding, created_at')
+      .eq('user_id', user.id)
+      .eq('status', 'unmatched')
+      .order('created_at', { ascending: false })
+      .limit(8)
+
+    const bestWaitingDae = (waitingDaes ?? [])
+      .map((dae) => ({
+        dae,
+        fit: scoreThreadAttachmentFit({
+          daeText: dae.text,
+          daeEmbedding: dae.embedding,
+          threadTexts: thread.participants.map((participant) => participant.daeText),
+          threadEmbeddings: thread.participants.map((participant) => participant.daeEmbedding),
+          latestActivityAt: thread.latestActivityAt,
+          participantCount: thread.participantCount,
+        }),
+      }))
+      .sort((a, b) => b.fit.score - a.fit.score)[0]
+
+    if (bestWaitingDae && bestWaitingDae.fit.score >= 0.38) {
+      redirect(`${roomTarget}&daeId=${encodeURIComponent(bestWaitingDae.dae.id)}`)
+    }
+
+    redirect(
+      (waitingDaes ?? []).length > 0
+        ? roomTarget
+        : `/submit?invite=${encodeURIComponent(matchId)}&draft=${encodeURIComponent(presentation.searchQuery)}`
+    )
+  }
 
   after(async () => {
     await trackAnalyticsEvent({

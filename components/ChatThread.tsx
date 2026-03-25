@@ -50,6 +50,7 @@ interface Props {
   matchReason: string
   matchConfidence: string
   matchSharedTerms: string[]
+  threadMemory: string
   topicKey: string
   initialLastSeenAt: string | null
   blockedUserIds: string[]
@@ -80,6 +81,7 @@ export default function ChatThread({
   matchReason,
   matchConfidence,
   matchSharedTerms,
+  threadMemory,
   topicKey,
   initialLastSeenAt,
   blockedUserIds,
@@ -181,6 +183,12 @@ export default function ChatThread({
       const response = await fetch(`/api/messages?matchId=${encodeURIComponent(matchId)}`, {
         cache: 'no-store',
       })
+
+      if (response.status === 403 || response.status === 404) {
+        router.replace('/review')
+        return
+      }
+
       const data = await response.json()
 
       if (response.ok && Array.isArray(data?.messages)) {
@@ -202,6 +210,12 @@ export default function ChatThread({
       const response = await fetch(`/api/thread-participants?matchId=${encodeURIComponent(matchId)}`, {
         cache: 'no-store',
       })
+
+      if (response.status === 403 || response.status === 404) {
+        router.replace('/review')
+        return
+      }
+
       const data = await response.json()
 
       if (response.ok && Array.isArray(data?.participants)) {
@@ -465,6 +479,12 @@ export default function ChatThread({
                   {matchSharedTerms.join(', ')}
                 </span>
               ) : null}
+            </div>
+            <div className="mt-3 rounded-2xl bg-[var(--dae-surface-strong)] px-3 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent-cool)]">
+                Room memory
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[var(--dae-muted)]">{threadMemory}</p>
             </div>
           </div>
 

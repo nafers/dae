@@ -1,9 +1,11 @@
+import { after } from 'next/server'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import AppShell from '@/components/AppShell'
 import JoinThreadControl from '@/components/JoinThreadControl'
 import ThreadOverviewCard from '@/components/ThreadOverviewCard'
 import WaitingDaesList from '@/components/WaitingDaesList'
+import { trackAnalyticsEvent } from '@/lib/analytics'
 import { fetchJoinRequestStatesForUser } from '@/lib/thread-join-requests'
 import { getRoomModerationState, fetchRoomModerationStates } from '@/lib/moderation-state'
 import { getRequestUser } from '@/lib/request-user'
@@ -144,6 +146,23 @@ export default async function ReviewPage({ searchParams }: Props) {
           : new Date(b.dae.created_at).getTime() - new Date(a.dae.created_at).getTime()
     )
 
+  const suggestionCount = suggestionGroups.reduce((total, group) => total + group.suggestions.length, 0)
+
+  after(async () => {
+    await trackAnalyticsEvent({
+      eventName: 'review_suggestions_opened',
+      userId: user.id,
+      metadata: {
+        waitingCount: typedWaitingDaes.length,
+        suggestionCount,
+        focusedTopic: focusedTopic || null,
+        focusedDaeId: focusedDaeId || null,
+        focusedMatchId: focusedMatchId || null,
+        inviteMatchId: inviteMatchId || null,
+      },
+    })
+  })
+
   return (
     <AppShell
       activeTab="review"
@@ -204,6 +223,9 @@ export default async function ReviewPage({ searchParams }: Props) {
                           .filter((dae) => pendingRequestKeys.has(`${invitedThread.matchId}:${dae.id}`))
                           .map((dae) => dae.id)}
                         joinLocked={getRoomModerationState(roomStates, invitedThread.matchId).joinLocked}
+                        sourceContext={{
+                          source: 'invite_review',
+                        }}
                       />
                     ) : undefined
                   }
@@ -309,6 +331,12 @@ export default async function ReviewPage({ searchParams }: Props) {
                                   pendingRequestKeys.has(`${thread.matchId}:${dae.id}`) ? [dae.id] : []
                                 }
                                 joinLocked={moderation.joinLocked}
+                                sourceContext={{
+                                  source: inviteMatchId ? 'invite_review' : focusedMatchId ? 'submit_near_match' : focusedTopic ? 'topic_hub' : 'review_suggestion',
+                                  fitScore: fit.score,
+                                  fitReason: fit.reason,
+                                  topic: focusedTopic || undefined,
+                                }}
                               />
                             }
                             secondaryAction={

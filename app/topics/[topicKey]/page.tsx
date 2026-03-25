@@ -1,17 +1,17 @@
 import { after } from 'next/server'
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import AppShell from '@/components/AppShell'
 import FollowTopicButton from '@/components/FollowTopicButton'
 import ShareButton from '@/components/ShareButton'
-import ThreadOverviewCard from '@/components/ThreadOverviewCard'
 import TopicCurationControls from '@/components/TopicCurationControls'
 import TopicSignalBar from '@/components/TopicSignalBar'
 import { trackAnalyticsEvent } from '@/lib/analytics'
 import { isFounderEmail } from '@/lib/founders'
-import { fetchTopicHubData, fetchTopicByKey } from '@/lib/topic-hubs'
-import { buildTopicActivityFeed } from '@/lib/topic-activity'
+import { fetchTopicHubData, fetchTopicByKey, resolveTopicKey } from '@/lib/topic-hubs'
+import { fetchTopicAliasMap, getTopicAliasSources } from '@/lib/topic-aliases'
 import { fetchTopicCurationStates, getTopicCurationState } from '@/lib/topic-curation'
+import { buildTopicMemorySummary } from '@/lib/topic-memory'
 import { fetchRelatedTopics } from '@/lib/topic-registry'
 import { fetchTopicSignalSummaries } from '@/lib/quality-signals'
 import { getRequestUser } from '@/lib/request-user'
@@ -36,49 +36,65 @@ function formatTimestamp(timestamp: string) {
 export default async function TopicHubPage({ params }: Props) {
   const { topicKey } = await params
   const user = await getRequestUser()
-  const topic = await fetchTopicByKey(topicKey)
+  const founder = isFounderEmail(user?.email)
+  const resolvedTopicKey = await resolveTopicKey(topicKey)
+
+  if (resolvedTopicKey !== topicKey && !founder) {
+    redirect(`/topics/${encodeURIComponent(resolvedTopicKey)}`)
+  }
+
+  const topic = await fetchTopicByKey(founder ? topicKey : resolvedTopicKey)
 
   if (!topic) {
     notFound()
   }
 
-  const founder = isFounderEmail(user?.email)
   const topicCurationState = getTopicCurationState(
     await fetchTopicCurationStates([topic.topicKey]),
     topic.topicKey
   )
+  const currentAliasTargetKey = resolvedTopicKey !== topic.topicKey ? resolvedTopicKey : null
 
   if (topicCurationState.hidden && !founder) {
     notFound()
   }
 
-  const [{ waitingPrompts, relatedRooms }, signalMap, followedTopics, waitingCount, relatedTopics] = await Promise.all([
-    fetchTopicHubData({
-      topic,
-      currentUserId: user?.id ?? null,
-    }),
-    fetchTopicSignalSummaries({
-      topicKeys: [topic.topicKey],
-      currentUserId: user?.id ?? null,
-    }),
-    user ? fetchActiveTopicFollows(user.id) : Promise.resolve(new Map()),
-    user
-      ? createAdminClient()
-          .from('daes')
-          .select('*', { count: 'exact', head: true })
-          .eq('user_id', user.id)
-          .eq('status', 'unmatched')
-          .then((result) => result.count ?? 0)
-      : Promise.resolve(0),
-    fetchRelatedTopics(topic.topicKey, 4),
-  ])
+  const [{ waitingPrompts, relatedRooms }, signalMap, followedTopics, waitingCount, relatedTopics, aliasMap] =
+    await Promise.all([
+      fetchTopicHubData({
+        topic,
+        currentUserId: user?.id ?? null,
+      }),
+      fetchTopicSignalSummaries({
+        topicKeys: [topic.topicKey],
+        currentUserId: user?.id ?? null,
+      }),
+      user ? fetchActiveTopicFollows(user.id) : Promise.resolve(new Map()),
+      user
+        ? createAdminClient()
+            .from('daes')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', user.id)
+            .eq('status', 'unmatched')
+            .then((result) => result.count ?? 0)
+        : Promise.resolve(0),
+      fetchRelatedTopics(topic.topicKey, 4),
+      fetchTopicAliasMap(),
+    ])
 
   const signalSummary = signalMap.get(topic.topicKey)
   const following = followedTopics.has(topic.topicKey)
-  const activityItems = buildTopicActivityFeed({
+  const topicMemory = buildTopicMemorySummary({
     relatedRooms,
     waitingPrompts,
-  }).slice(0, 6)
+  })
+  const aliasSourceCount = getTopicAliasSources(topic.topicKey, aliasMap).length
+  const joinedRooms = relatedRooms.filter((thread) => thread.isJoined)
+  const availableRoomCount = Math.max(relatedRooms.length - joinedRooms.length, 0)
+  const activePeopleCount = new Set(
+    relatedRooms.flatMap((thread) => thread.participants.map((participant) => participant.userId))
+  ).size
+  const topicExamples = [...new Set([...topic.sampleDaes, ...waitingPrompts.map((prompt) => prompt.text)])].slice(0, 6)
 
   after(async () => {
     if (!user) {
@@ -129,22 +145,26 @@ export default async function TopicHubPage({ params }: Props) {
                 <span className="rounded-full bg-[var(--dae-surface)] px-3 py-1 text-xs font-medium text-[var(--dae-muted)]">
                   {relatedRooms.length} active room{relatedRooms.length === 1 ? '' : 's'}
                 </span>
+                {aliasSourceCount > 0 ? (
+                  <span className="rounded-full bg-[var(--dae-surface)] px-3 py-1 text-xs font-medium text-[var(--dae-muted)]">
+                    absorbing {aliasSourceCount} merged topic{aliasSourceCount === 1 ? '' : 's'}
+                  </span>
+                ) : null}
               </div>
               <p className="mt-3 text-sm leading-6 text-[var(--dae-muted)]">
                 Latest activity {formatTimestamp(topic.latestAt)}
               </p>
             </div>
-
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href="/topics"
-              className="rounded-full border border-[var(--dae-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-ink)] hover:border-[var(--dae-muted)]"
-            >
-              All topics
-            </Link>
-            <Link
-              href={user ? `/submit?draft=${encodeURIComponent(topic.headline)}` : `/?next=${encodeURIComponent(`/submit?draft=${topic.searchQuery}`)}`}
-              className="rounded-full border border-[var(--dae-accent)] bg-[var(--dae-accent-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent)] hover:opacity-95"
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/topics"
+                className="rounded-full border border-[var(--dae-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-ink)] hover:border-[var(--dae-muted)]"
+              >
+                All topics
+              </Link>
+              <Link
+                href={user ? `/submit?draft=${encodeURIComponent(topic.headline)}` : `/?next=${encodeURIComponent(`/submit?draft=${topic.searchQuery}`)}`}
+                className="rounded-full border border-[var(--dae-accent)] bg-[var(--dae-accent-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent)] hover:opacity-95"
               >
                 Start from this
               </Link>
@@ -183,6 +203,13 @@ export default async function TopicHubPage({ params }: Props) {
             ))}
           </div>
 
+          <div className="mt-4 rounded-2xl bg-[var(--dae-surface)] px-4 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent-cool)]">
+              Topic memory
+            </p>
+            <p className="mt-2 text-sm leading-6 text-[var(--dae-muted)]">{topicMemory}</p>
+          </div>
+
           <div className="mt-4 flex flex-wrap items-center gap-3">
             {signalSummary ? (
               <TopicSignalBar
@@ -210,6 +237,12 @@ export default async function TopicHubPage({ params }: Props) {
                 topicKey={topic.topicKey}
                 initialHidden={topicCurationState.hidden}
                 initialPinned={topicCurationState.pinned}
+                initialAliasTargetKey={currentAliasTargetKey}
+                aliasOptions={relatedTopics.map((relatedTopic) => ({
+                  topicKey: relatedTopic.topicKey,
+                  label: relatedTopic.label,
+                  headline: relatedTopic.headline,
+                }))}
               />
             ) : null}
           </div>
@@ -221,44 +254,27 @@ export default async function TopicHubPage({ params }: Props) {
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--dae-accent-cool)]">
-                    Active rooms
+                    Examples from the pool
                   </p>
                   <p className="mt-1 text-sm text-[var(--dae-muted)]">
-                    Anonymous rooms people are already using for this idea.
+                    Specific DAEs and phrasing around this topic. Browse stays at the idea level.
                   </p>
                 </div>
               </div>
 
               <div className="mt-4 grid gap-3">
-                {relatedRooms.length === 0 ? (
+                {topicExamples.length === 0 ? (
                   <div className="rounded-2xl bg-[var(--dae-surface)] px-4 py-4 text-sm text-[var(--dae-muted)]">
-                    No active rooms yet.
+                    No examples yet.
                   </div>
                 ) : (
-                  relatedRooms.map((thread) => (
-                    <ThreadOverviewCard
-                      key={thread.matchId}
-                      thread={thread}
-                      compact
-                      showLatestActivity={false}
-                      primaryAction={
-                        thread.isJoined ? (
-                          <Link
-                            href={`/threads/${thread.matchId}`}
-                            className="rounded-full border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-cool)] hover:opacity-95"
-                          >
-                            Open
-                          </Link>
-                        ) : (
-                          <Link
-                            href={user ? `/review?invite=${encodeURIComponent(thread.matchId)}` : `/?next=${encodeURIComponent(`/review?invite=${thread.matchId}`)}`}
-                            className="rounded-full border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-warm)] hover:opacity-95"
-                          >
-                            {user ? 'See fit' : 'Sign in to join'}
-                          </Link>
-                        )
-                      }
-                    />
+                  topicExamples.map((example) => (
+                    <div
+                      key={`${topic.topicKey}-${example}`}
+                      className="rounded-2xl bg-[var(--dae-surface)] px-4 py-3 text-sm leading-6 text-[var(--dae-ink)]"
+                    >
+                      {example}
+                    </div>
                   ))
                 )}
               </div>
@@ -268,33 +284,86 @@ export default async function TopicHubPage({ params }: Props) {
           <div className="space-y-4">
             <div className="rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-5 shadow-[0_14px_36px_rgba(32,26,22,0.05)]">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--dae-accent-cool)]">
-                Topic activity
+                Rooms around this topic
               </p>
               <p className="mt-1 text-sm text-[var(--dae-muted)]">
-                The latest motion around this idea, across rooms and still-waiting prompts.
+                Counts and entry points only. Chat conversations stay inside rooms.
               </p>
 
-              <div className="mt-4 space-y-2">
-                {activityItems.length === 0 ? (
-                  <div className="rounded-2xl bg-[var(--dae-surface)] px-4 py-4 text-sm text-[var(--dae-muted)]">
-                    Quiet right now.
-                  </div>
-                ) : (
-                  activityItems.map((item) => (
-                    <Link
-                      key={item.id}
-                      href={item.href}
-                      className="block rounded-2xl bg-[var(--dae-surface)] px-4 py-3 transition-colors hover:bg-white"
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <div className="rounded-2xl bg-[var(--dae-surface)] px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-muted)]">
+                    Active rooms
+                  </p>
+                  <p className="mt-1 text-xl font-semibold text-[var(--dae-ink)]">{relatedRooms.length}</p>
+                </div>
+                <div className="rounded-2xl bg-[var(--dae-surface)] px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-muted)]">
+                    People
+                  </p>
+                  <p className="mt-1 text-xl font-semibold text-[var(--dae-ink)]">{activePeopleCount}</p>
+                </div>
+                <div className="rounded-2xl bg-[var(--dae-surface)] px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-muted)]">
+                    Waiting
+                  </p>
+                  <p className="mt-1 text-xl font-semibold text-[var(--dae-ink)]">{waitingPrompts.length}</p>
+                </div>
+              </div>
+
+              {joinedRooms.length > 0 ? (
+                <div className="mt-4 space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent-cool)]">
+                    Your rooms here
+                  </p>
+                  {joinedRooms.map((thread) => (
+                    <div
+                      key={thread.matchId}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[var(--dae-surface)] px-4 py-3"
                     >
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent-cool)]">
-                        {item.kind === 'room' ? 'Room activity' : 'Waiting prompt'}
-                      </p>
-                      <p className="mt-1 text-sm font-medium text-[var(--dae-ink)]">{item.title}</p>
-                      <p className="mt-1 text-xs leading-5 text-[var(--dae-muted)]">{item.detail}</p>
-                      <p className="mt-1 text-[11px] text-[var(--dae-muted)]">{formatTimestamp(item.timestamp)}</p>
+                      <div>
+                        <p className="text-sm font-medium text-[var(--dae-ink)]">
+                          Room {thread.matchId.slice(0, 8)}
+                        </p>
+                        <p className="mt-1 text-xs text-[var(--dae-muted)]">
+                          {thread.participantCount} {thread.participantCount === 1 ? 'person' : 'people'} | Active{' '}
+                          {formatTimestamp(thread.latestActivityAt)}
+                        </p>
+                      </div>
+                      <Link
+                        href={`/threads/${thread.matchId}`}
+                        className="rounded-full border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-cool)] hover:opacity-95"
+                      >
+                        Open chat
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="mt-4 rounded-2xl bg-[var(--dae-surface)] px-4 py-4">
+                <p className="text-sm leading-6 text-[var(--dae-muted)]">
+                  {availableRoomCount > 0
+                    ? `${availableRoomCount} room${availableRoomCount === 1 ? '' : 's'} already exist around this topic. Bring your DAE into Review to see if one fits.`
+                    : 'No visible rooms yet. Add your DAE to help this topic gather.'}
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {user ? (
+                    <Link
+                      href={waitingCount > 0 ? `/review?topic=${encodeURIComponent(topic.headline)}` : `/submit?draft=${encodeURIComponent(topic.searchQuery)}`}
+                      className="rounded-full border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-warm)] hover:opacity-95"
+                    >
+                      {waitingCount > 0 ? 'See fit in Review' : 'Add your DAE'}
                     </Link>
-                  ))
-                )}
+                  ) : (
+                    <Link
+                      href={`/?next=${encodeURIComponent(`/topics/${topic.topicKey}`)}`}
+                      className="rounded-full border border-[var(--dae-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-ink)] hover:border-[var(--dae-muted)]"
+                    >
+                      Sign in to continue
+                    </Link>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -331,10 +400,10 @@ export default async function TopicHubPage({ params }: Props) {
 
             <div className="rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-5 shadow-[0_14px_36px_rgba(32,26,22,0.05)]">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--dae-accent-warm)]">
-                Waiting prompts
+                DAEs still waiting
               </p>
               <p className="mt-1 text-sm text-[var(--dae-muted)]">
-                Recent DAEs circling this topic, even if they have not landed in a room yet.
+                Recent prompts circling this topic, even if they have not landed anywhere yet.
               </p>
 
               <div className="mt-4 space-y-2">

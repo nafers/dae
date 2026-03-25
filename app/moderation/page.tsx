@@ -27,7 +27,7 @@ export default async function ModerationPage() {
   const user = await getRequestUser()
 
   if (!user) redirect('/?next=/moderation')
-  if (!isFounderEmail(user.email)) redirect('/submit')
+  if (!isFounderEmail(user.email)) redirect('/now')
 
   const { items, unresolved, resolved } = await fetchModerationQueue(user.id)
   const followUpCount = resolved.filter((item) => item.decision === 'follow_up').length

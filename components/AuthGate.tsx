@@ -19,7 +19,7 @@ export default function AuthGate({ nextPath, authError }: Props) {
   const router = useRouter()
 
   const [supabase] = useState(() => createClient())
-  const safeNext = nextPath?.startsWith('/') ? nextPath : '/submit'
+  const safeNext = nextPath?.startsWith('/') ? nextPath : '/now'
 
   useEffect(() => {
     const {

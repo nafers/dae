@@ -7,7 +7,7 @@ export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
   const targetEmail = requestUrl.searchParams.get('email')?.trim().toLowerCase() ?? ''
   const nextPath = requestUrl.searchParams.get('next')
-  const safeNext = nextPath?.startsWith('/') ? nextPath : '/submit'
+  const safeNext = nextPath?.startsWith('/') ? nextPath : '/now'
 
   const user = await getRequestUser()
 
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
 
   const admin = createAdminClient()
   const redirectTo = new URL('/auth/callback', requestUrl.origin)
-  if (safeNext !== '/submit') {
+  if (safeNext !== '/now') {
     redirectTo.searchParams.set('next', safeNext)
   }
 
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
   const callbackUrl = new URL('/auth/callback', requestUrl.origin)
   callbackUrl.searchParams.set('token_hash', hashedToken)
   callbackUrl.searchParams.set('type', verificationType)
-  if (safeNext !== '/submit') {
+  if (safeNext !== '/now') {
     callbackUrl.searchParams.set('next', safeNext)
   }
 

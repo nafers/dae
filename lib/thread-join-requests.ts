@@ -15,6 +15,10 @@ export interface ThreadJoinRequest {
   requesterId: string
   daeId: string
   daeText: string
+  source: string | null
+  fitScore: number | null
+  fitReason: string | null
+  topic: string | null
   createdAt: string
   state: 'requested' | 'approved' | 'declined' | 'cancelled'
   resolvedAt: string | null
@@ -60,6 +64,10 @@ function buildRequestMap(rows: JoinRequestEventRow[]) {
         requesterId,
         daeId,
         daeText,
+        source: typeof row.metadata?.source === 'string' ? row.metadata.source : null,
+        fitScore: typeof row.metadata?.fitScore === 'number' ? row.metadata.fitScore : null,
+        fitReason: typeof row.metadata?.fitReason === 'string' ? row.metadata.fitReason : null,
+        topic: typeof row.metadata?.topic === 'string' ? row.metadata.topic : null,
         createdAt: row.created_at,
         state: 'requested',
         resolvedAt: null,

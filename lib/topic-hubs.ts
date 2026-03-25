@@ -1,5 +1,6 @@
 import { fetchCachedBrowseTopics, type BrowseTopicItem } from '@/lib/browse-directory'
 import { fetchRoomModerationStates, getRoomModerationState } from '@/lib/moderation-state'
+import { fetchTopicAliasMap, getTopicAliasTarget, resolveTopicAlias } from '@/lib/topic-aliases'
 import { scoreTextPair } from '@/lib/text-similarity'
 import { createAdminClient } from '@/lib/supabase/server'
 import { fetchThreadDirectory } from '@/lib/thread-directory'
@@ -14,6 +15,16 @@ interface TopicHubWaitingRow {
 export async function fetchTopicByKey(topicKey: string) {
   const topics = await fetchCachedBrowseTopics()
   return topics.find((topic) => topic.topicKey === topicKey) ?? null
+}
+
+export async function resolveTopicKey(topicKey: string) {
+  const aliasMap = await fetchTopicAliasMap()
+  return resolveTopicAlias(topicKey, aliasMap)
+}
+
+export async function fetchTopicAliasTarget(topicKey: string) {
+  const aliasMap = await fetchTopicAliasMap()
+  return getTopicAliasTarget(topicKey, aliasMap)
 }
 
 function scoreTopicAffinity(topic: BrowseTopicItem, text: string) {

@@ -6,10 +6,10 @@ import { trackAnalyticsEvent } from '@/lib/analytics'
 export async function POST(request: Request) {
   const requestUrl = new URL(request.url)
   const { email, nextPath } = await request.json()
-  const safeNext = typeof nextPath === 'string' && nextPath.startsWith('/') ? nextPath : '/submit'
+  const safeNext = typeof nextPath === 'string' && nextPath.startsWith('/') ? nextPath : '/now'
   const redirectUrl = new URL('/auth/callback', requestUrl.origin)
 
-  if (safeNext !== '/submit') {
+  if (safeNext !== '/now') {
     redirectUrl.searchParams.set('next', safeNext)
   }
 

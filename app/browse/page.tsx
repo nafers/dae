@@ -2,7 +2,6 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import AppShell from '@/components/AppShell'
 import BrowseTopics from '@/components/BrowseTopics'
-import { fetchTopicSignalSummaries } from '@/lib/quality-signals'
 import { getRequestUser } from '@/lib/request-user'
 import { createAdminClient } from '@/lib/supabase/server'
 import { fetchTopicRegistry } from '@/lib/topic-registry'
@@ -30,10 +29,6 @@ export default async function BrowsePage({ searchParams }: Props) {
     fetchTopicRegistry(user.id),
   ])
   const browseTopics = topicRegistry.items
-  const topicSignalSummaries = await fetchTopicSignalSummaries({
-    topicKeys: browseTopics.map((topic) => topic.topicKey),
-    currentUserId: user.id,
-  })
 
   return (
     <AppShell
@@ -43,8 +38,8 @@ export default async function BrowsePage({ searchParams }: Props) {
       title="Browse ideas"
       description={
         (waitingCount ?? 0) > 0
-          ? `Search ideas. ${topicRegistry.followed.length} following. Review to attach yours.`
-          : `Search the pool. ${topicRegistry.followed.length} following.`
+          ? `Search summaries and sample DAEs. ${topicRegistry.followed.length} following. Review to attach yours.`
+          : `Search the pool by keyword, not by room. ${topicRegistry.followed.length} following.`
       }
       actions={
         <Link
@@ -65,7 +60,6 @@ export default async function BrowsePage({ searchParams }: Props) {
           waitingCount={waitingCount ?? 0}
           initialQuery={initialQuery}
           followedTopicKeys={topicRegistry.followed.map((topic) => topic.topicKey)}
-          signalSummaries={Object.fromEntries(topicSignalSummaries.entries())}
         />
       )}
     </AppShell>

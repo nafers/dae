@@ -8,7 +8,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 
 export async function POST(request: Request) {
   try {
-    const { matchId, daeId } = await request.json()
+    const { matchId, daeId, sourceContext } = await request.json()
 
     if (!matchId || typeof matchId !== 'string') {
       return NextResponse.json({ error: 'Missing matchId' }, { status: 400 })
@@ -123,6 +123,31 @@ export async function POST(request: Request) {
       daeId,
       metadata: {
         participantCountBeforeJoin: threadParticipants?.length ?? 0,
+        source:
+          sourceContext && typeof sourceContext === 'object' && typeof sourceContext.source === 'string'
+            ? sourceContext.source
+            : 'direct_join',
+      },
+    })
+
+    await trackAnalyticsEvent({
+      eventName: 'thread_auto_joined',
+      userId: user.id,
+      matchId,
+      daeId,
+      metadata: {
+        source:
+          sourceContext && typeof sourceContext === 'object' && typeof sourceContext.source === 'string'
+            ? sourceContext.source
+            : 'direct_join',
+        fitScore:
+          sourceContext && typeof sourceContext === 'object' && typeof sourceContext.fitScore === 'number'
+            ? Number(sourceContext.fitScore.toFixed(3))
+            : null,
+        fitReason:
+          sourceContext && typeof sourceContext === 'object' && typeof sourceContext.fitReason === 'string'
+            ? sourceContext.fitReason
+            : null,
       },
     })
 

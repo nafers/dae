@@ -73,7 +73,7 @@ export default async function MetricsPage() {
   const admin = createAdminClient()
 
   if (!user) redirect('/?next=/metrics')
-  if (!isFounderEmail(user.email)) redirect('/submit')
+  if (!isFounderEmail(user.email)) redirect('/now')
 
   const [{ data: analyticsEvents, error: analyticsError }, { data: daes }, { data: messages }] =
     await Promise.all([
@@ -113,9 +113,18 @@ export default async function MetricsPage() {
   const topicFollowed = eventRows.filter((event) => event.event_name === 'topic_followed')
   const topicHidden = eventRows.filter((event) => event.event_name === 'topic_hidden')
   const topicPinned = eventRows.filter((event) => event.event_name === 'topic_pinned')
+  const topicAliasSet = eventRows.filter((event) => event.event_name === 'topic_alias_set')
   const moderatedRoomHidden = eventRows.filter((event) => event.event_name === 'moderation_room_hidden')
   const moderatedRoomJoinsLocked = eventRows.filter(
     (event) => event.event_name === 'moderation_room_join_locked'
+  )
+  const nearMatchPresented = eventRows.filter((event) => event.event_name === 'near_match_options_presented')
+  const reviewSuggestionsOpened = eventRows.filter((event) => event.event_name === 'review_suggestions_opened')
+  const joinRequested = eventRows.filter((event) => event.event_name === 'thread_join_requested')
+  const joinApproved = eventRows.filter((event) => event.event_name === 'thread_join_request_approved')
+  const autoJoined = eventRows.filter((event) => event.event_name === 'thread_auto_joined')
+  const attachedUserFirstMessage = eventRows.filter(
+    (event) => event.event_name === 'attached_user_first_message'
   )
   const mutedEvents = eventRows.filter((event) => event.event_name === 'thread_muted')
   const hiddenEvents = eventRows.filter((event) => event.event_name === 'thread_hidden')
@@ -124,6 +133,10 @@ export default async function MetricsPage() {
   const topicNotForMeEvents = eventRows.filter((event) => event.event_name === 'topic_signal_not_for_me')
   const roomUsefulEvents = eventRows.filter((event) => event.event_name === 'room_signal_useful')
   const roomNotQuiteEvents = eventRows.filter((event) => event.event_name === 'room_signal_not_quite')
+  const removalVoteEvents = eventRows.filter((event) => event.event_name === 'thread_member_removal_voted')
+  const removedByVoteEvents = eventRows.filter(
+    (event) => event.event_name === 'thread_member_removed_by_vote'
+  )
 
   const totalDaes = daeRows.length
   const waitingDaes = daeRows.filter((dae) => dae.status === 'unmatched').length
@@ -313,8 +326,36 @@ export default async function MetricsPage() {
               />
               <MetricCard
                 label="Topic curation"
-                value={topicPinned.length + topicHidden.length}
-                detail={`${topicPinned.length} pinned, ${topicHidden.length} hidden`}
+                value={topicPinned.length + topicHidden.length + topicAliasSet.length}
+                detail={`${topicPinned.length} pinned, ${topicHidden.length} hidden, ${topicAliasSet.length} merged`}
+              />
+            </div>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-4">
+              <MetricCard
+                label="Near matches shown"
+                value={nearMatchPresented.length}
+                detail="Waiting prompts that got rescue paths"
+              />
+              <MetricCard
+                label="Review opens"
+                value={reviewSuggestionsOpened.length}
+                detail="People viewed rescue suggestions"
+              />
+              <MetricCard
+                label="Join requests"
+                value={joinRequested.length}
+                detail={`${joinApproved.length} approved`}
+              />
+              <MetricCard
+                label="Auto-joins"
+                value={autoJoined.length}
+                detail="Strong-fit rescues that skipped approval"
+              />
+              <MetricCard
+                label="Rescue replies"
+                value={attachedUserFirstMessage.length}
+                detail="Attached users who sent a first message"
               />
             </div>
 
@@ -356,14 +397,22 @@ export default async function MetricsPage() {
 
             <div className="mt-6 grid gap-4 lg:grid-cols-2">
               <MetricCard
-                label="Founder room controls"
-                value={moderatedRoomHidden.length}
-                detail={`${moderatedRoomJoinsLocked.length} rooms had joins paused`}
+                label="Removal votes"
+                value={removalVoteEvents.length}
+                detail={`${removedByVoteEvents.length} people removed from rooms`}
               />
               <MetricCard
                 label="Topic following"
                 value={topicFollowed.length}
                 detail={`${topicHubOpened.length} topic hub opens tracked`}
+              />
+            </div>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-1">
+              <MetricCard
+                label="Founder room controls"
+                value={moderatedRoomHidden.length}
+                detail={`${moderatedRoomJoinsLocked.length} rooms had joins paused`}
               />
             </div>
 
@@ -389,8 +438,8 @@ export default async function MetricsPage() {
                           {String((event.metadata as { reason?: string } | null)?.reason ?? 'other')}
                         </p>
                         <p className="mt-1 text-xs text-[var(--dae-muted)]">
-                          {event.match_id ? `room ${event.match_id.slice(0, 8)}` : 'no room'} ·{' '}
-                          {event.user_id ? `user ${event.user_id.slice(0, 8)}` : 'anonymous'} ·{' '}
+                          {event.match_id ? `room ${event.match_id.slice(0, 8)}` : 'no room'} |{' '}
+                          {event.user_id ? `user ${event.user_id.slice(0, 8)}` : 'anonymous'} |{' '}
                           {formatTimestamp(event.created_at)}
                         </p>
                       </div>
@@ -414,7 +463,7 @@ export default async function MetricsPage() {
                       <div>
                         <p className="text-sm font-medium text-[var(--dae-ink)]">{event.event_name}</p>
                         <p className="mt-1 text-xs text-[var(--dae-muted)]">
-                          {event.match_id ? `room ${event.match_id.slice(0, 8)}` : 'no room'} ·{' '}
+                          {event.match_id ? `room ${event.match_id.slice(0, 8)}` : 'no room'} |{' '}
                           {event.user_id ? `user ${event.user_id.slice(0, 8)}` : 'anonymous'}
                         </p>
                       </div>

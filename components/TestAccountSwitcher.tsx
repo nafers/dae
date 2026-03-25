@@ -33,7 +33,7 @@ export default function TestAccountSwitcher({ userEmail, testAccountEmails }: Pr
     setPending(true)
     const params = new URLSearchParams({
       email: selectedEmail,
-      next: nextPath.startsWith('/') ? nextPath : '/submit',
+      next: nextPath.startsWith('/') ? nextPath : '/now',
     })
 
     window.location.assign(`/api/auth/test-switch?${params.toString()}`)

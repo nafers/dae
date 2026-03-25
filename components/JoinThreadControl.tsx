@@ -2,10 +2,23 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { canAutoJoinThreadWithFitScore } from '@/lib/thread-join-policy'
 
 interface WaitingDaeOption {
   id: string
   text: string
+}
+
+interface JoinSourceContext {
+  source:
+    | 'review_suggestion'
+    | 'invite_review'
+    | 'topic_hub'
+    | 'submit_near_match'
+    | 'manual_review'
+  fitScore?: number
+  fitReason?: string
+  topic?: string
 }
 
 interface Props {
@@ -14,6 +27,7 @@ interface Props {
   defaultDaeId?: string
   initialRequestedDaeIds?: string[]
   joinLocked?: boolean
+  sourceContext?: JoinSourceContext
 }
 
 export default function JoinThreadControl({
@@ -22,6 +36,7 @@ export default function JoinThreadControl({
   defaultDaeId,
   initialRequestedDaeIds = [],
   joinLocked = false,
+  sourceContext,
 }: Props) {
   const router = useRouter()
   const [selectedDaeId, setSelectedDaeId] = useState(defaultDaeId ?? availableDaes[0]?.id ?? '')
@@ -29,6 +44,9 @@ export default function JoinThreadControl({
   const [requestedDaeIds, setRequestedDaeIds] = useState<string[]>(initialRequestedDaeIds)
   const [error, setError] = useState('')
   const requested = selectedDaeId ? requestedDaeIds.includes(selectedDaeId) : false
+  const fitScore = typeof sourceContext?.fitScore === 'number' ? sourceContext.fitScore : null
+  const canAutoJoin = canAutoJoinThreadWithFitScore(fitScore)
+  const fitPercent = fitScore === null ? null : Math.round(fitScore * 100)
 
   useEffect(() => {
     setSelectedDaeId(defaultDaeId ?? availableDaes[0]?.id ?? '')
@@ -43,23 +61,41 @@ export default function JoinThreadControl({
     setError('')
 
     try {
-      const response = await fetch('/api/thread-join-requests', {
+      const response = await fetch(canAutoJoin ? '/api/threads/join' : '/api/thread-join-requests', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          action: 'request',
-          matchId,
-          daeId: selectedDaeId,
-        }),
+        body: JSON.stringify(
+          canAutoJoin
+            ? {
+                matchId,
+                daeId: selectedDaeId,
+                sourceContext,
+              }
+            : {
+                action: 'request',
+                matchId,
+                daeId: selectedDaeId,
+                sourceContext,
+              }
+        ),
       })
       const data = await response.json()
 
       if (!response.ok) {
         throw new Error(
-          typeof data?.error === 'string' ? data.error : 'Unable to request this chat.'
+          typeof data?.error === 'string'
+            ? data.error
+            : canAutoJoin
+              ? 'Unable to join this chat.'
+              : 'Unable to request this chat.'
         )
+      }
+
+      if (canAutoJoin) {
+        router.push(`/threads/${matchId}`)
+        return
       }
 
       setRequestedDaeIds((current) =>
@@ -111,17 +147,25 @@ export default function JoinThreadControl({
           {joinLocked
             ? 'Joins paused'
             : requesting
-              ? 'Requesting...'
+              ? canAutoJoin
+                ? 'Joining...'
+                : 'Requesting...'
               : requested
                 ? 'Requested'
-                : 'Request to join'}
+                : canAutoJoin
+                  ? 'Join now'
+                  : 'Request to join'}
         </button>
         <p className="text-xs text-[var(--dae-muted)]">
           {joinLocked
             ? 'A founder paused new joins for this room.'
+            : canAutoJoin
+              ? `Strong fit (${fitPercent ?? 0}%). You can join right away.`
             : requested
               ? 'Waiting for someone in the room to approve.'
-              : 'Send your waiting DAE into review for this room.'}
+              : fitScore !== null
+                ? `${fitPercent ?? 0}% fit. Someone in the room has to admit it.`
+                : 'Send your waiting DAE into review for this room.'}
         </p>
       </div>
 

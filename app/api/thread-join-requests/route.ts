@@ -66,6 +66,10 @@ export async function POST(request: Request) {
 
     if (action === 'request') {
       const daeId = typeof payload?.daeId === 'string' ? payload.daeId : ''
+      const sourceContext =
+        payload?.sourceContext && typeof payload.sourceContext === 'object'
+          ? (payload.sourceContext as Record<string, unknown>)
+          : null
 
       if (!daeId) {
         return NextResponse.json({ error: 'Missing daeId' }, { status: 400 })
@@ -143,6 +147,11 @@ export async function POST(request: Request) {
             daeId,
             daeText: dae.text,
             matchId,
+            source: typeof sourceContext?.source === 'string' ? sourceContext.source : 'manual_review',
+            fitScore:
+              typeof sourceContext?.fitScore === 'number' ? Number(sourceContext.fitScore.toFixed(3)) : null,
+            fitReason: typeof sourceContext?.fitReason === 'string' ? sourceContext.fitReason : null,
+            topic: typeof sourceContext?.topic === 'string' ? sourceContext.topic : null,
           },
         },
       ])
@@ -176,6 +185,7 @@ export async function POST(request: Request) {
           metadata: {
             requestId,
             requesterId: joinRequest.requesterId,
+            source: joinRequest.source,
           },
         },
       ])
@@ -198,6 +208,7 @@ export async function POST(request: Request) {
           metadata: {
             requestId,
             requesterId: joinRequest.requesterId,
+            source: joinRequest.source,
           },
         },
       ])
@@ -295,6 +306,10 @@ export async function POST(request: Request) {
           requestId,
           requesterId: joinRequest.requesterId,
           handle,
+          source: joinRequest.source,
+          fitScore: joinRequest.fitScore,
+          fitReason: joinRequest.fitReason,
+          topic: joinRequest.topic,
         },
       },
       {
@@ -305,6 +320,10 @@ export async function POST(request: Request) {
         metadata: {
           via: 'join_request',
           approvedBy: user.id,
+          source: joinRequest.source,
+          fitScore: joinRequest.fitScore,
+          fitReason: joinRequest.fitReason,
+          topic: joinRequest.topic,
         },
       },
     ])
