@@ -290,10 +290,10 @@ export default function BrowseTopics({ topics, waitingCount }: Props) {
                 </Link>
                 {waitingCount > 0 ? (
                   <Link
-                    href="/review"
-                    className="rounded-full border border-[var(--dae-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-ink)] hover:border-[var(--dae-muted)]"
+                    href={`/review?topic=${encodeURIComponent(topic.headline)}`}
+                    className="rounded-full border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-warm)] hover:opacity-95"
                   >
-                    Review
+                    Attach a waiting DAE
                   </Link>
                 ) : null}
               </div>

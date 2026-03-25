@@ -3,6 +3,7 @@ import { trackAnalyticsEvents } from '@/lib/analytics'
 import { getThreadUserState, fetchThreadUserStates } from '@/lib/thread-state'
 import { chooseRepresentativeText, getTopicLabel } from '@/lib/topic-label'
 import { createAdminClient } from '@/lib/supabase/server'
+import { fetchUserPreferencesMap } from '@/lib/user-preferences'
 
 interface ThreadParticipantRow {
   user_id: string
@@ -95,6 +96,7 @@ export async function sendThreadMessageNotifications({
         })
       )
     ).filter((target): target is NotificationTarget => target !== null)
+    const preferenceMap = await fetchUserPreferencesMap(recipientTargets.map((target) => target.userId))
 
     if (recipientTargets.length === 0) {
       return
@@ -125,6 +127,20 @@ export async function sendThreadMessageNotifications({
     for (const target of recipientTargets) {
       const recipientParticipant = recipients.find((participant) => participant.user_id === target.userId)
       if (!recipientParticipant) {
+        continue
+      }
+
+      const preferences = preferenceMap.get(target.userId)
+      if (preferences && !preferences.replyEmails) {
+        analyticsEvents.push({
+          eventName: 'message_email_skipped',
+          userId: target.userId,
+          matchId,
+          daeId: recipientParticipant.dae_id,
+          metadata: {
+            reason: 'reply_emails_off',
+          },
+        })
         continue
       }
 

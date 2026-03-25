@@ -1,8 +1,9 @@
 import Link from 'next/link'
+import ActivityNav from '@/components/ActivityNav'
 import TestAccountSwitcher from '@/components/TestAccountSwitcher'
 import { canUseTestSwitcher, getTestAccountEmails } from '@/lib/test-accounts'
 
-type AppTab = 'submit' | 'review' | 'threads' | 'browse'
+type AppTab = 'submit' | 'review' | 'threads' | 'browse' | 'activity' | 'settings'
 
 interface Props {
   activeTab: AppTab
@@ -43,6 +44,16 @@ const tabStyles: Record<AppTab, { active: string; accent: string }> = {
       'border border-[var(--dae-accent-rose)] bg-[var(--dae-accent-rose-soft)] text-[var(--dae-accent-rose)] shadow-[0_10px_24px_rgba(200,88,99,0.12)]',
     accent: 'text-[var(--dae-accent-rose)]',
   },
+  activity: {
+    active:
+      'border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)] text-[var(--dae-accent-cool)] shadow-[0_10px_24px_rgba(37,99,235,0.12)]',
+    accent: 'text-[var(--dae-accent-cool)]',
+  },
+  settings: {
+    active:
+      'border border-[var(--dae-line)] bg-[var(--dae-surface)] text-[var(--dae-ink)] shadow-[0_10px_24px_rgba(32,26,22,0.08)]',
+    accent: 'text-[var(--dae-muted)]',
+  },
 }
 
 export default function AppShell({
@@ -77,6 +88,17 @@ export default function AppShell({
               {testAccountEmails.length > 1 ? (
                 <TestAccountSwitcher userEmail={userEmail} testAccountEmails={testAccountEmails} />
               ) : null}
+              <ActivityNav active={activeTab === 'activity'} />
+              <Link
+                href="/settings"
+                className={`rounded-full border px-3 py-1.5 text-xs font-medium shadow-sm transition-colors ${
+                  activeTab === 'settings'
+                    ? 'border-[var(--dae-line)] bg-[var(--dae-surface)] text-[var(--dae-ink)]'
+                    : 'border-[var(--dae-line)] bg-[var(--dae-surface-strong)] text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]'
+                }`}
+              >
+                Settings
+              </Link>
               {actions}
               <span className="max-w-[240px] truncate rounded-full border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] shadow-sm">
                 {userEmail}

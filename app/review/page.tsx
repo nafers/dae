@@ -8,6 +8,7 @@ import { isFounderEmail } from '@/lib/founders'
 import { getRequestUser } from '@/lib/request-user'
 import { scoreThreadAttachmentFit } from '@/lib/thread-fit'
 import { createAdminClient } from '@/lib/supabase/server'
+import { scoreTextPair } from '@/lib/text-similarity'
 import { fetchThreadDirectory } from '@/lib/thread-directory'
 
 interface WaitingDae {
@@ -15,6 +16,12 @@ interface WaitingDae {
   text: string
   embedding?: unknown
   created_at: string
+}
+
+interface Props {
+  searchParams: Promise<{
+    topic?: string | string[]
+  }>
 }
 
 function getFitTone(score: number) {
@@ -35,7 +42,9 @@ function getFitTone(score: number) {
   }
 }
 
-export default async function ReviewPage() {
+export default async function ReviewPage({ searchParams }: Props) {
+  const { topic } = await searchParams
+  const focusedTopic = Array.isArray(topic) ? topic[0] ?? '' : topic ?? ''
   const user = await getRequestUser()
 
   if (!user) redirect('/')
@@ -61,6 +70,7 @@ export default async function ReviewPage() {
   const typedWaitingDaes = (waitingDaes ?? []) as WaitingDae[]
   const suggestionGroups = typedWaitingDaes.map((dae) => ({
     dae,
+    focusScore: focusedTopic ? scoreTextPair(focusedTopic, dae.text) : 0,
     suggestions: discoverThreads
       .map((thread) => ({
         thread,
@@ -72,11 +82,26 @@ export default async function ReviewPage() {
           latestActivityAt: thread.latestActivityAt,
           participantCount: thread.participantCount,
         }),
+        focusScore: focusedTopic
+          ? Math.max(
+              ...thread.participants.map((participant) => scoreTextPair(focusedTopic, participant.daeText)),
+              0
+            )
+          : 0,
       }))
-      .filter((entry) => entry.fit.score >= 0.34)
-      .sort((a, b) => b.fit.score - a.fit.score)
+      .map((entry) => ({
+        ...entry,
+        weightedScore: entry.fit.score + entry.focusScore * 0.14,
+      }))
+      .filter((entry) => entry.weightedScore >= 0.34)
+      .sort((a, b) => b.weightedScore - a.weightedScore)
       .slice(0, 3),
   }))
+    .sort((a, b) =>
+      focusedTopic
+        ? b.focusScore + (b.suggestions[0]?.weightedScore ?? 0) - (a.focusScore + (a.suggestions[0]?.weightedScore ?? 0))
+        : new Date(b.dae.created_at).getTime() - new Date(a.dae.created_at).getTime()
+    )
 
   return (
     <AppShell
@@ -84,7 +109,7 @@ export default async function ReviewPage() {
       userEmail={user.email ?? ''}
       eyebrow="Review"
       title="Waiting"
-      description="Attach or remove."
+      description={focusedTopic ? `Attach or remove. Focused on: ${focusedTopic}` : 'Attach or remove.'}
       actions={
         isFounderEmail(user.email) ? (
           <Link
@@ -116,6 +141,27 @@ export default async function ReviewPage() {
         </div>
       ) : (
         <div className="space-y-5">
+          {focusedTopic ? (
+            <section className="rounded-[24px] border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] p-4">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent-warm)]">
+                    Browse handoff
+                  </p>
+                  <p className="mt-1 text-sm text-[var(--dae-ink)]">
+                    Matching your waiting prompts against <strong>{focusedTopic}</strong>.
+                  </p>
+                </div>
+                <Link
+                  href="/review"
+                  className="rounded-full border border-[var(--dae-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
+                >
+                  Clear
+                </Link>
+              </div>
+            </section>
+          ) : null}
+
           <WaitingDaesList waitingDaes={typedWaitingDaes} />
 
           <div className="space-y-5">

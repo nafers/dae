@@ -8,6 +8,7 @@ import { trackAnalyticsEvent } from '@/lib/analytics'
 import { isFounderEmail } from '@/lib/founders'
 import { getRequestUser } from '@/lib/request-user'
 import { fetchThreadUserStates, getThreadUserState } from '@/lib/thread-state'
+import { chooseRepresentativeText, getTopicLabel } from '@/lib/topic-label'
 
 interface Props {
   params: Promise<{ matchId: string }>
@@ -38,6 +39,10 @@ function getDaeText(daeRelation: DaeRelation | DaeRelation[] | null) {
   }
 
   return daeRelation?.text ?? ''
+}
+
+function uniqueTexts(texts: string[]) {
+  return [...new Set(texts.map((text) => text.trim()).filter(Boolean))]
 }
 
 export default async function ThreadPage({ params }: Props) {
@@ -82,6 +87,10 @@ export default async function ThreadPage({ params }: Props) {
         dae: getDaeText(participant.daes),
       })),
   ]
+  const daeTexts = uniqueTexts(orderedParticipants.map((participant) => participant.dae))
+  const threadHeadline = chooseRepresentativeText(daeTexts) || 'Shared room'
+  const threadTopicLabel = getTopicLabel(daeTexts) || 'Chat'
+  const supportingDaes = daeTexts.filter((text) => text !== threadHeadline).slice(0, 2)
 
   const [{ data: initialMessages }, { data: feedbackEvent }, threadStateMap] = await Promise.all([
     admin
@@ -126,9 +135,9 @@ export default async function ThreadPage({ params }: Props) {
     <AppShell
       activeTab="threads"
       userEmail={user.email ?? ''}
-      eyebrow="Chat"
-      title="Room"
-      description={`#${matchId.slice(0, 8)}`}
+      eyebrow={threadTopicLabel}
+      title={threadHeadline}
+      description={`Room ${matchId.slice(0, 8)} · ${orderedParticipants.length} ${orderedParticipants.length === 1 ? 'person' : 'people'}`}
       compact
       actions={
         isFounderEmail(user.email) ? (
@@ -148,6 +157,9 @@ export default async function ThreadPage({ params }: Props) {
         initialFeedback={initialFeedback}
         initialMessages={initialMessages ?? []}
         initialThreadState={initialThreadState}
+        threadHeadline={threadHeadline}
+        threadTopicLabel={threadTopicLabel}
+        supportingDaes={supportingDaes}
       />
     </AppShell>
   )

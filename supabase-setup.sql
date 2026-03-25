@@ -64,17 +64,38 @@ create index if not exists messages_match_created_idx
 create index if not exists messages_match_sender_created_idx
   on messages (match_id, sender_id, created_at desc);
 
--- 6. Row Level Security
+-- 6. User preferences
+create table if not exists user_preferences (
+  user_id        uuid primary key references auth.users(id) on delete cascade,
+  match_emails   boolean not null default true,
+  reply_emails   boolean not null default true,
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now()
+);
+
+create index if not exists user_preferences_updated_at_idx
+  on user_preferences (updated_at desc);
+
+-- 7. Row Level Security
 alter table daes enable row level security;
 alter table matches enable row level security;
 alter table thread_participants enable row level security;
 alter table messages enable row level security;
+alter table user_preferences enable row level security;
 
 -- DAE policies: users can see and insert their own
 create policy "users read own daes" on daes
   for select using (auth.uid() = user_id);
 create policy "users insert own daes" on daes
   for insert with check (auth.uid() = user_id);
+
+create policy "users read own preferences" on user_preferences
+  for select using (auth.uid() = user_id);
+create policy "users insert own preferences" on user_preferences
+  for insert with check (auth.uid() = user_id);
+create policy "users update own preferences" on user_preferences
+  for update using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
 
 -- Thread participant policies: participants see all rows for their matches
 create policy "participants read threads" on thread_participants
@@ -105,7 +126,7 @@ create policy "participants send messages" on messages
     )
   );
 
--- 7. Matching function (called from the API)
+-- 8. Matching function (called from the API)
 create or replace function find_match(
   query_embedding vector(1536),
   exclude_user_id uuid,

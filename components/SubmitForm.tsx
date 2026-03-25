@@ -8,6 +8,50 @@ interface Props {
   initialText?: string
 }
 
+const starterPrompts = [
+  'replay a conversation for hours after it ends',
+  'love the way Scrubs still holds up',
+  'hear your heartbeat in your ear sometimes',
+  'mentally rehearse ordering before it is your turn',
+]
+
+function normalizePrompt(value: string) {
+  return value
+    .replace(/^\s*does\s+anyone\s+else[\s,.!?-]*/i, '')
+    .replace(/^\.\.\.\s*/, '')
+    .trim()
+}
+
+function getPromptTips(rawText: string) {
+  const normalizedText = normalizePrompt(rawText)
+  const tips: string[] = []
+
+  if (!rawText.trim()) {
+    return [
+      'Lead with the specific habit, thought, or feeling. The app already supplies the opening words.',
+      'Specific beats broad. "replay a conversation for hours" will match better than "overthink things."',
+    ]
+  }
+
+  if (rawText.trim() !== normalizedText) {
+    tips.push('No need to type "Does anyone else?" again. The app adds it for you.')
+  }
+
+  if (normalizedText.length > 0 && normalizedText.length < 28) {
+    tips.push('Add the odd detail. The more specific version usually matches better.')
+  }
+
+  if (
+    !/\b(always|sometimes|mentally|randomly|replay|rehearse|check|count|hear|love|hate|wish|feel|keep|avoid|watch)\b/i.test(
+      normalizedText
+    )
+  ) {
+    tips.push('Try phrasing it as the actual thing you do or notice, not a category.')
+  }
+
+  return tips.slice(0, 2)
+}
+
 export default function SubmitForm({ initialText = '' }: Props) {
   const [text, setText] = useState(initialText)
   const [loading, setLoading] = useState(false)
@@ -15,9 +59,11 @@ export default function SubmitForm({ initialText = '' }: Props) {
   const [error, setError] = useState('')
   const router = useRouter()
 
-  const charCount = text.length
+  const normalizedText = normalizePrompt(text)
+  const charCount = normalizedText.length
   const maxChars = 280
   const minChars = 10
+  const promptTips = getPromptTips(text)
 
   useEffect(() => {
     setText(initialText)
@@ -27,7 +73,7 @@ export default function SubmitForm({ initialText = '' }: Props) {
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
-    if (text.length < minChars) return
+    if (normalizedText.length < minChars) return
 
     setLoading(true)
     setError('')
@@ -36,7 +82,7 @@ export default function SubmitForm({ initialText = '' }: Props) {
       const response = await fetch('/api/embed-and-match', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text: normalizedText }),
       })
 
       const data = await response.json()
@@ -74,7 +120,7 @@ export default function SubmitForm({ initialText = '' }: Props) {
         </div>
 
         <div className="rounded-2xl bg-white/80 px-4 py-3">
-          <p className="text-sm leading-6 text-[var(--dae-ink)]">{text}</p>
+          <p className="text-sm leading-6 text-[var(--dae-ink)]">{normalizedText}</p>
         </div>
 
         <div className="flex flex-wrap gap-2">
@@ -119,7 +165,11 @@ export default function SubmitForm({ initialText = '' }: Props) {
           <label htmlFor="dae-text" className="text-sm font-semibold text-[var(--dae-ink)]">
             Does anyone else?
           </label>
-          <span className={`text-xs ${charCount > maxChars * 0.9 ? 'text-[var(--dae-accent-warm)]' : 'text-[var(--dae-muted)]'}`}>
+          <span
+            className={`text-xs ${
+              charCount > maxChars * 0.9 ? 'text-[var(--dae-accent-warm)]' : 'text-[var(--dae-muted)]'
+            }`}
+          >
             {charCount}/{maxChars}
           </span>
         </div>
@@ -127,7 +177,7 @@ export default function SubmitForm({ initialText = '' }: Props) {
         <textarea
           id="dae-text"
           value={text}
-          onChange={(event) => setText(event.target.value.slice(0, maxChars))}
+          onChange={(event) => setText(event.target.value.slice(0, maxChars + 24))}
           placeholder="love the way Scrubs still holds up"
           rows={5}
           className="mt-4 w-full resize-none bg-transparent text-lg leading-8 text-[var(--dae-ink)] placeholder:text-stone-400 focus:outline-none"
@@ -138,6 +188,39 @@ export default function SubmitForm({ initialText = '' }: Props) {
           {charCount < minChars && charCount > 0 ? (
             <span className="text-xs text-[var(--dae-muted)]">{minChars - charCount} more</span>
           ) : null}
+        </div>
+
+        <div className="mt-4 space-y-3">
+          <div className="rounded-2xl bg-[var(--dae-surface)] px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent)]">
+              Better matches
+            </p>
+            <div className="mt-2 space-y-1">
+              {promptTips.map((tip) => (
+                <p key={tip} className="text-xs leading-5 text-[var(--dae-muted)]">
+                  {tip}
+                </p>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-muted)]">
+              Starter prompts
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {starterPrompts.map((prompt) => (
+                <button
+                  key={prompt}
+                  type="button"
+                  onClick={() => setText(prompt)}
+                  className="rounded-full border border-[var(--dae-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] hover:border-[var(--dae-accent)] hover:text-[var(--dae-accent)]"
+                >
+                  {prompt}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 

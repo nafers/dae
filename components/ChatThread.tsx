@@ -32,6 +32,9 @@ interface Props {
     muted: boolean
     hidden: boolean
   }
+  threadHeadline: string
+  threadTopicLabel: string
+  supportingDaes: string[]
 }
 
 function orderParticipants(participants: Participant[], myUserId: string) {
@@ -50,6 +53,9 @@ export default function ChatThread({
   initialFeedback,
   initialMessages,
   initialThreadState,
+  threadHeadline,
+  threadTopicLabel,
+  supportingDaes,
 }: Props) {
   const [participants, setParticipants] = useState<Participant[]>(
     orderParticipants(initialParticipants, myUserId)
@@ -341,7 +347,26 @@ export default function ChatThread({
   return (
     <div className="flex min-h-[72vh] flex-col overflow-hidden rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] shadow-[0_18px_40px_rgba(32,26,22,0.06)]">
       <div className="flex-shrink-0 border-b border-[var(--dae-line)] bg-[var(--dae-surface)] px-4 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--dae-accent-cool)]">
+                {threadTopicLabel}
+              </p>
+              <span className="rounded-full bg-[var(--dae-surface-strong)] px-2.5 py-1 text-[11px] font-medium text-[var(--dae-muted)]">
+                Room {matchId.slice(0, 8)}
+              </span>
+            </div>
+            <h2 className="mt-2 text-xl font-semibold tracking-tight text-[var(--dae-ink)]">
+              {threadHeadline}
+            </h2>
+            {supportingDaes.length > 0 ? (
+              <p className="mt-1 line-clamp-2 text-sm leading-6 text-[var(--dae-muted)]">
+                Also here: {supportingDaes.join(' · ')}
+              </p>
+            ) : null}
+          </div>
+
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -350,20 +375,25 @@ export default function ChatThread({
             >
               Back
             </button>
-            <p className="text-sm font-medium text-[var(--dae-ink)]">
+            <span className="rounded-full bg-[var(--dae-surface-strong)] px-2.5 py-1 text-[11px] font-medium text-[var(--dae-muted)]">
               {participantMeta.length} {participantMeta.length === 1 ? 'person' : 'people'}
-            </p>
+            </span>
+            <Link
+              href="/threads"
+              className="rounded-full border border-[var(--dae-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
+            >
+              All chats
+            </Link>
           </div>
-
-          <Link
-            href="/threads"
-            className="rounded-full border border-[var(--dae-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
-          >
-            All chats
-          </Link>
         </div>
 
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+        <div className="mt-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-muted)]">
+            Connected by
+          </p>
+        </div>
+
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
           {participantMeta.map((participant) => (
             <div
               key={participant.userId}

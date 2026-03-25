@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { Resend } from 'resend'
 import { createAdminClient } from '@/lib/supabase/server'
 import { trackAnalyticsEvents } from '@/lib/analytics'
+import { fetchUserPreferencesMap } from '@/lib/user-preferences'
 
 const resend = new Resend(process.env.RESEND_API_KEY)
 const NOTIFICATION_FROM = 'Hey DAE <hello@heydae.app>'
@@ -17,6 +18,7 @@ export async function POST(request: Request) {
       admin.auth.admin.getUserById(userAId),
       admin.auth.admin.getUserById(userBId),
     ])
+    const preferenceMap = await fetchUserPreferencesMap([userAId, userBId])
 
     const recipientA = userA?.user?.email ?? null
     const recipientB = userB?.user?.email ?? null
@@ -53,20 +55,33 @@ export async function POST(request: Request) {
       </div>
     `
 
-    const results = await Promise.allSettled([
-      resend.emails.send({
-        from: NOTIFICATION_FROM,
-        to: recipientA,
-        subject: NOTIFICATION_SUBJECT,
+    const sendPlans = [
+      {
+        userId: userAId,
+        recipient: recipientA,
         html: emailHtml(handleA, handleB, daeAText, daeBText),
-      }),
-      resend.emails.send({
-        from: NOTIFICATION_FROM,
-        to: recipientB,
-        subject: NOTIFICATION_SUBJECT,
+      },
+      {
+        userId: userBId,
+        recipient: recipientB,
         html: emailHtml(handleB, handleA, daeBText, daeAText),
-      }),
-    ])
+      },
+    ]
+    const results = await Promise.allSettled(
+      sendPlans.map((plan) => {
+        const preferences = preferenceMap.get(plan.userId)
+        if (preferences && !preferences.matchEmails) {
+          return Promise.resolve({ skipped: true })
+        }
+
+        return resend.emails.send({
+          from: NOTIFICATION_FROM,
+          to: plan.recipient,
+          subject: NOTIFICATION_SUBJECT,
+          html: plan.html,
+        })
+      })
+    )
 
     await trackAnalyticsEvents([
       {
@@ -74,7 +89,7 @@ export async function POST(request: Request) {
         userId: userAId,
         matchId,
         metadata: {
-          status: results[0].status,
+          status: preferenceMap.get(userAId)?.matchEmails === false ? 'skipped' : results[0].status,
         },
       },
       {
@@ -82,7 +97,7 @@ export async function POST(request: Request) {
         userId: userBId,
         matchId,
         metadata: {
-          status: results[1].status,
+          status: preferenceMap.get(userBId)?.matchEmails === false ? 'skipped' : results[1].status,
         },
       },
     ])
