@@ -84,7 +84,7 @@ export default async function NowPage() {
             title: waitingRows[0].text,
             detail: 'This DAE is still waiting. Review rescue options or keep it in the pool.',
             href: `/review?daeId=${encodeURIComponent(waitingRows[0].id)}`,
-            label: 'Review fit',
+            label: 'Place it',
           }
         : topicItems[0]
           ? {
@@ -258,7 +258,7 @@ export default async function NowPage() {
                     href="/review"
                     className="rounded-full border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] px-3 py-1.5 text-xs font-medium text-[var(--dae-accent-warm)] hover:opacity-95"
                   >
-                    Review
+                    Place
                   </Link>
                   <Link
                     href="/submit"

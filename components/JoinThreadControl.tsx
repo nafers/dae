@@ -165,7 +165,7 @@ export default function JoinThreadControl({
               ? 'Waiting for someone in the room to approve.'
               : fitScore !== null
                 ? `${fitPercent ?? 0}% fit. Someone in the room has to admit it.`
-                : 'Send your waiting DAE into review for this room.'}
+                : 'Send your waiting DAE into Place for this room.'}
         </p>
       </div>
 

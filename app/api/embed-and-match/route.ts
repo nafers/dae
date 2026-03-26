@@ -94,6 +94,8 @@ export async function POST(request: Request) {
           metadata: {
             nearRoomIds: nearMatches.nearRooms.map((room) => room.matchId),
             nearTopicKeys: nearMatches.nearTopics.map((topic) => topic.topicKey),
+            autoJoinRoomCount: nearMatches.nearRooms.filter((room) => room.joinMode === 'join_now').length,
+            approvalRoomCount: nearMatches.nearRooms.filter((room) => room.joinMode === 'request').length,
           },
         })
       }

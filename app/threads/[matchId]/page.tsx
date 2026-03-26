@@ -16,6 +16,10 @@ import { getTopicPresentation } from '@/lib/topic-intelligence'
 
 interface Props {
   params: Promise<{ matchId: string }>
+  searchParams: Promise<{
+    jump?: string | string[]
+    focus?: string | string[]
+  }>
 }
 
 interface DaeRelation {
@@ -49,11 +53,18 @@ function uniqueTexts(texts: string[]) {
   return [...new Set(texts.map((text) => text.trim()).filter(Boolean))]
 }
 
-export default async function ThreadPage({ params }: Props) {
+export default async function ThreadPage({ params, searchParams }: Props) {
   const { matchId } = await params
+  const { jump, focus } = await searchParams
+  const jumpTarget = Array.isArray(jump) ? jump[0] ?? '' : jump ?? ''
+  const focusTarget = Array.isArray(focus) ? focus[0] ?? '' : focus ?? ''
   const user = await getRequestUser()
+  const preservedParams = new URLSearchParams()
+  if (jumpTarget) preservedParams.set('jump', jumpTarget)
+  if (focusTarget) preservedParams.set('focus', focusTarget)
+  const nextPath = preservedParams.size > 0 ? `/threads/${matchId}?${preservedParams.toString()}` : `/threads/${matchId}`
 
-  if (!user) redirect(`/?next=/threads/${matchId}`)
+  if (!user) redirect(`/?next=${encodeURIComponent(nextPath)}`)
 
   const admin = createAdminClient()
   const { data: participants, error } = await admin
@@ -197,6 +208,7 @@ export default async function ThreadPage({ params }: Props) {
         topicKey={topicPresentation.topicKey}
         initialLastSeenAt={initialThreadState.lastSeenAt}
         blockedUserIds={[...blockedUserIds]}
+        initialFocus={focusTarget === 'requests' ? 'requests' : jumpTarget === 'unread' ? 'unread' : 'latest'}
       />
     </AppShell>
   )

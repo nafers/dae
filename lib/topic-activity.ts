@@ -43,7 +43,7 @@ export function buildTopicActivityFeed({
       id: `waiting:${prompt.id}`,
       kind: 'waiting' as const,
       title: prompt.text,
-      detail: 'Still waiting for the right rescue or match.',
+      detail: 'Still waiting for the right room or match.',
       href: '/review',
       timestamp: prompt.created_at,
     })),

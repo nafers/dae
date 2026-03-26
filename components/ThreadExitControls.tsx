@@ -287,7 +287,7 @@ export default function ThreadExitControls({
                 Hidden
               </span>
             ) : null}
-            <p className="text-xs text-[var(--dae-muted)]">Detach also deletes your messages.</p>
+            <p className="text-xs text-[var(--dae-muted)]">Detach removes your DAE and deletes your messages here.</p>
           </div>
         </div>
       </div>
@@ -401,7 +401,7 @@ export default function ThreadExitControls({
               Vote to remove
             </p>
             <p className="mt-1 text-xs text-[var(--dae-muted)]">
-              Only for rooms with 3+ people. Enough votes removes that person, deletes their messages here, and reopens their DAE elsewhere.
+              Only for rooms with 3+ people. Enough votes removes that person, clears their messages here, and reopens their DAE elsewhere.
             </p>
           </div>
 
@@ -440,7 +440,7 @@ export default function ThreadExitControls({
             <p className="text-xs text-[var(--dae-muted)]">
               {selectedRemovalSummary
                 ? `${selectedRemovalSummary.votesCount}/${selectedRemovalSummary.threshold} votes so far.`
-                : 'Needs 2+ votes depending on room size.'}
+                : 'Rooms this size usually need 2 votes.'}
             </p>
           </div>
 

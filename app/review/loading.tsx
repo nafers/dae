@@ -1,5 +1,5 @@
 import PageSkeleton from '@/components/PageSkeleton'
 
 export default function Loading() {
-  return <PageSkeleton title="Review" blocks={3} />
+  return <PageSkeleton title="Place" blocks={3} />
 }

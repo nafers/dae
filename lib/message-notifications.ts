@@ -20,6 +20,7 @@ interface NotificationTarget {
 
 interface MessageStateRow {
   sender_id: string
+  content: string
   created_at: string
 }
 
@@ -122,7 +123,7 @@ export async function sendThreadMessageNotifications({
       lastSeenValues[0] ?? new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString()
     const { data: recentMessages } = await admin
       .from('messages')
-      .select('sender_id, created_at')
+      .select('sender_id, content, created_at')
       .eq('match_id', matchId)
       .gt('created_at', oldestRelevantSeenAt)
       .order('created_at', { ascending: false })
@@ -141,7 +142,7 @@ export async function sendThreadMessageNotifications({
     const topicTexts = threadParticipants.map((participant) => getDaeText(participant.daes)).filter(Boolean)
     const topicLabel = getTopicLabel(topicTexts)
     const headline = chooseRepresentativeText(topicTexts)
-    const threadUrl = `${process.env.NEXT_PUBLIC_APP_URL}/threads/${matchId}`
+    const threadUrl = `${process.env.NEXT_PUBLIC_APP_URL}/threads/${matchId}?jump=unread`
     const senderDae = getDaeText(sender.daes)
     const analyticsEvents = []
 
@@ -185,6 +186,20 @@ export async function sendThreadMessageNotifications({
           message.sender_id !== target.userId &&
           (!state.lastSeenAt || new Date(message.created_at).getTime() > new Date(state.lastSeenAt).getTime())
       ).length
+      const unreadPreview = ((recentMessages ?? []) as MessageStateRow[])
+        .filter(
+          (message) =>
+            message.sender_id !== target.userId &&
+            (!state.lastSeenAt || new Date(message.created_at).getTime() > new Date(state.lastSeenAt).getTime())
+        )
+        .slice(0, 2)
+        .map((message) => {
+          const speaker =
+            threadParticipants.find((participant) => participant.user_id === message.sender_id)?.handle ?? 'Someone'
+
+          return `${speaker}: ${message.content}`
+        })
+        .reverse()
       const shouldWaitForMore =
         unreadCount <= 1 && Boolean(state.lastSeenAt) && isRecent(state.lastSeenAt, SOFT_GRACE_WINDOW_MS)
 
@@ -233,6 +248,14 @@ export async function sendThreadMessageNotifications({
             <h1 style="font-size: 24px; line-height: 1.3; font-weight: 700; margin: 0 0 8px;">${sender.handle} replied.</h1>
             <p style="margin: 0 0 20px; color: #57534e;">Topic: ${headline}</p>
             <p style="margin: 0 0 18px; color: #57534e;">${unreadCount > 1 ? `${unreadCount} unread messages are waiting.` : 'There is a new unread reply waiting.'}</p>
+            ${
+              unreadPreview.length > 0
+                ? `<div style="background: #fffaf0; border-radius: 14px; padding: 14px; margin-bottom: 14px;">
+              <p style="font-size: 12px; font-weight: 700; color: #9a3412; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 8px;">While you were away</p>
+              <p style="margin: 0; color: #57534e;">${unreadPreview.join('<br/>')}</p>
+            </div>`
+                : ''
+            }
 
             <div style="background: #f8fafc; border-radius: 18px; padding: 18px; margin-bottom: 14px;">
               <p style="font-size: 12px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.08em; margin: 0 0 6px;">${sender.handle}</p>
@@ -270,6 +293,7 @@ export async function sendThreadMessageNotifications({
             senderId,
             senderHandle: sender.handle,
             unreadCount,
+            unreadPreviewCount: unreadPreview.length,
           },
         })
       } catch (error) {

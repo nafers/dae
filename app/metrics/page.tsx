@@ -338,9 +338,9 @@ export default async function MetricsPage() {
                 detail="Waiting prompts that got rescue paths"
               />
               <MetricCard
-                label="Review opens"
+                label="Place opens"
                 value={reviewSuggestionsOpened.length}
-                detail="People viewed rescue suggestions"
+                detail="People viewed placement suggestions"
               />
               <MetricCard
                 label="Join requests"
@@ -355,7 +355,7 @@ export default async function MetricsPage() {
               <MetricCard
                 label="Rescue replies"
                 value={attachedUserFirstMessage.length}
-                detail="Attached users who sent a first message"
+                detail={`${formatPercent(attachedUserFirstMessage.length, Math.max(autoJoined.length + joinApproved.length, 1))} of rescued joins sent a first message`}
               />
             </div>
 

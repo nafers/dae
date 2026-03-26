@@ -46,7 +46,7 @@ export default async function SubmitPage({ searchParams }: Props) {
               href="/review"
               className="rounded-full border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-warm)] hover:opacity-95"
             >
-              Review
+              Place
             </Link>
             <Link
               href="/threads"

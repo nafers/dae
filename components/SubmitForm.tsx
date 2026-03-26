@@ -205,7 +205,7 @@ export default function SubmitForm({ initialText = '', initialInviteMatchId = ''
                   Almost there
                 </p>
                 <p className="mt-1 text-sm text-[var(--dae-muted)]">
-                  These look close enough to rescue instead of just waiting.
+                  These look close enough to place now instead of only waiting.
                 </p>
               </div>
               <Link
@@ -216,7 +216,7 @@ export default function SubmitForm({ initialText = '', initialInviteMatchId = ''
                 }
                 className="rounded-full border border-[var(--dae-accent-warm)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-accent-warm)] hover:bg-[var(--dae-accent-warm-soft)]"
               >
-                Review all
+                Open place
               </Link>
             </div>
 
@@ -241,6 +241,20 @@ export default function SubmitForm({ initialText = '', initialInviteMatchId = ''
                     <p className="mt-2 text-xs text-[var(--dae-muted)]">
                       {room.reason} | {room.participantCount} people
                     </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span
+                        className={`rounded-full px-3 py-1 text-[11px] font-medium ${
+                          room.roomHealthLabel === 'Working'
+                            ? 'bg-[var(--dae-accent-soft)] text-[var(--dae-accent)]'
+                            : room.roomHealthLabel === 'Risky'
+                              ? 'bg-[var(--dae-accent-rose-soft)] text-[var(--dae-accent-rose)]'
+                              : 'bg-[var(--dae-surface)] text-[var(--dae-muted)]'
+                        }`}
+                      >
+                        {room.roomHealthLabel}
+                      </span>
+                      <span className="text-[11px] text-[var(--dae-muted)]">{room.roomHealthDetail}</span>
+                    </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button
                         type="button"
@@ -260,7 +274,7 @@ export default function SubmitForm({ initialText = '', initialInviteMatchId = ''
                         href={`/review?daeId=${encodeURIComponent(waitingResult.daeId)}&matchId=${encodeURIComponent(room.matchId)}`}
                         className="rounded-full border border-[var(--dae-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
                       >
-                        More options
+                        Place options
                       </Link>
                       <span className="rounded-full bg-[var(--dae-surface)] px-3 py-1 text-[11px] font-medium text-[var(--dae-muted)]">
                         {room.joinMode === 'join_now' ? 'Auto-admit' : 'Needs admission'}
@@ -310,7 +324,7 @@ export default function SubmitForm({ initialText = '', initialInviteMatchId = ''
             href="/review"
             className="rounded-full border border-[var(--dae-accent-warm)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-accent-warm)] hover:bg-[var(--dae-accent-warm-soft)]"
           >
-            Review
+            Place
           </Link>
           <Link
             href="/browse"

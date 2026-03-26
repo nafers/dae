@@ -1,5 +1,6 @@
 import { fetchCachedBrowseTopics } from '@/lib/browse-directory'
 import { fetchRoomModerationStates, getRoomModerationState } from '@/lib/moderation-state'
+import { fetchRoomOutcomeSummaries, getRoomOutcomeSummary } from '@/lib/room-outcomes'
 import { canAutoJoinThreadWithFitScore } from '@/lib/thread-join-policy'
 import { chooseRepresentativeText, getTopicLabel } from '@/lib/topic-label'
 import { scoreTextPair } from '@/lib/text-similarity'
@@ -25,6 +26,8 @@ export interface NearRoomMatch {
   matchPercent: number
   fitScore: number
   joinMode: 'join_now' | 'request'
+  roomHealthLabel: 'Working' | 'Mixed' | 'Risky'
+  roomHealthDetail: string
 }
 
 export async function fetchNearMatches({
@@ -48,6 +51,7 @@ export async function fetchNearMatches({
     }),
   ])
   const roomStates = await fetchRoomModerationStates(discoverThreads.map((thread) => thread.matchId))
+  const roomOutcomes = await fetchRoomOutcomeSummaries(discoverThreads.map((thread) => thread.matchId))
 
   const nearTopics = topics
     .map((topic) => ({
@@ -84,6 +88,7 @@ export async function fetchNearMatches({
         latestActivityAt: thread.latestActivityAt,
         participantCount: thread.participantCount,
       })
+      const outcome = getRoomOutcomeSummary(roomOutcomes, thread.matchId)
 
       return {
         matchId: thread.matchId,
@@ -97,10 +102,13 @@ export async function fetchNearMatches({
         score: fit.score,
         fitScore: fit.score,
         joinMode: canAutoJoinThreadWithFitScore(fit.score) ? ('join_now' as const) : ('request' as const),
+        roomHealthLabel: outcome.label,
+        roomHealthDetail: outcome.detail,
+        rankScore: fit.score + outcome.score * 0.18,
       }
     })
     .filter((thread) => thread.score >= 0.42)
-    .sort((a, b) => b.score - a.score)
+    .sort((a, b) => b.rankScore - a.rankScore)
     .slice(0, 3)
     .map((thread) => ({
       matchId: thread.matchId,
@@ -113,6 +121,8 @@ export async function fetchNearMatches({
       matchPercent: thread.matchPercent,
       fitScore: thread.fitScore,
       joinMode: thread.joinMode,
+      roomHealthLabel: thread.roomHealthLabel,
+      roomHealthDetail: thread.roomHealthDetail,
     }) satisfies NearRoomMatch)
 
   return {

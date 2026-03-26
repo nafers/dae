@@ -36,8 +36,9 @@ export function buildThreadMemorySummary({
   const latestSpeaker =
     participants.find((participant) => participant.userId === latestMessage.sender_id)?.handle ?? 'Someone'
   const distinctSpeakers = new Set(messages.map((message) => message.sender_id)).size
+  const speakerLabel = distinctSpeakers === 1 ? 'person has' : 'people have'
 
-  return `${distinctSpeakers} ${
-    distinctSpeakers === 1 ? 'person has' : 'people have'
-  } posted so far. Latest: ${latestSpeaker} said “${truncateContent(latestMessage.content)}”.`
+  return `${distinctSpeakers} ${speakerLabel} posted so far. Latest: ${latestSpeaker} said "${truncateContent(
+    latestMessage.content
+  )}".`
 }

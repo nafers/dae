@@ -54,6 +54,7 @@ interface Props {
   topicKey: string
   initialLastSeenAt: string | null
   blockedUserIds: string[]
+  initialFocus: 'latest' | 'unread' | 'requests'
 }
 
 function orderParticipants(participants: Participant[], myUserId: string) {
@@ -85,6 +86,7 @@ export default function ChatThread({
   topicKey,
   initialLastSeenAt,
   blockedUserIds,
+  initialFocus,
 }: Props) {
   const [participants, setParticipants] = useState<Participant[]>(
     orderParticipants(initialParticipants, myUserId)
@@ -95,6 +97,7 @@ export default function ChatThread({
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollerRef = useRef<HTMLDivElement>(null)
   const firstUnreadDividerRef = useRef<HTMLDivElement>(null)
+  const joinRequestsRef = useRef<HTMLDivElement>(null)
   const router = useRouter()
   const supabase = useRef(createClient()).current
   const refreshInFlightRef = useRef(false)
@@ -385,7 +388,9 @@ export default function ChatThread({
     if (!hasPositionedInitialViewRef.current) {
       hasPositionedInitialViewRef.current = true
 
-      if (hasUnreadSinceLastVisit) {
+      if (initialFocus === 'requests') {
+        joinRequestsRef.current?.scrollIntoView({ behavior: 'auto', block: 'start' })
+      } else if (initialFocus === 'unread' && hasUnreadSinceLastVisit) {
         scrollToUnread('auto')
       } else {
         scrollToLatest('auto')
@@ -402,7 +407,7 @@ export default function ChatThread({
     if (isNearBottomRef.current || newestMessage.sender_id === myUserId) {
       scrollToLatest('smooth')
     }
-  }, [hasUnreadSinceLastVisit, messages, myUserId])
+  }, [hasUnreadSinceLastVisit, initialFocus, messages, myUserId])
 
   async function sendMessage(content: string) {
     setSendError('')
@@ -550,7 +555,9 @@ export default function ChatThread({
           ))}
         </div>
 
-        <JoinRequestsPanel matchId={matchId} initialRequests={initialJoinRequests} />
+        <div ref={joinRequestsRef}>
+          <JoinRequestsPanel matchId={matchId} initialRequests={initialJoinRequests} />
+        </div>
 
         <div className="mt-3">
           <div className="mb-3 rounded-2xl bg-[var(--dae-surface)] px-3 py-3">

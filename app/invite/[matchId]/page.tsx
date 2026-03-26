@@ -149,7 +149,7 @@ export default async function InvitePage({ params }: Props) {
             <div className="mt-3 grid gap-2 text-sm leading-6 text-[var(--dae-muted)]">
               <p>1. Sign in.</p>
               <p>2. Keep or submit a DAE that means the same thing.</p>
-              <p>3. {moderationState.joinLocked ? 'This room is paused for new joins right now, but you can still follow the topic.' : 'Request to join this room from Review.'}</p>
+              <p>3. {moderationState.joinLocked ? 'This room is paused for new joins right now, but you can still follow the topic.' : 'Request to join this room from Place.'}</p>
             </div>
           </div>
 

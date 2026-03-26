@@ -8,6 +8,14 @@ interface Props {
   initialRequests: ThreadJoinRequest[]
 }
 
+function getSourceLabel(source: ThreadJoinRequest['source']) {
+  if (source === 'invite_review') return 'Invite'
+  if (source === 'submit_near_match') return 'Submit'
+  if (source === 'topic_hub') return 'Topic'
+  if (source === 'review_suggestion' || source === 'manual_review') return 'Place'
+  return 'Room'
+}
+
 export default function JoinRequestsPanel({ matchId, initialRequests }: Props) {
   const [requests, setRequests] = useState<ThreadJoinRequest[]>(initialRequests)
   const [busyId, setBusyId] = useState('')
@@ -100,6 +108,20 @@ export default function JoinRequestsPanel({ matchId, initialRequests }: Props) {
                   {request.fitReason ? ` | ${request.fitReason}` : ''}
                 </p>
               ) : null}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-[var(--dae-surface)] px-2.5 py-1 text-[11px] font-medium text-[var(--dae-muted)]">
+                  {getSourceLabel(request.source)}
+                </span>
+                <span
+                  className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                    request.fitScore !== null && request.fitScore >= 0.56
+                      ? 'bg-[var(--dae-accent-soft)] text-[var(--dae-accent)]'
+                      : 'bg-[var(--dae-accent-warm-soft)] text-[var(--dae-accent-warm)]'
+                  }`}
+                >
+                  {request.fitScore !== null && request.fitScore >= 0.56 ? 'Strong fit' : 'Needs approval'}
+                </span>
+              </div>
               <p className="mt-1 text-[11px] text-[var(--dae-muted)]">
                 Requested {new Date(request.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
               </p>

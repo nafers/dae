@@ -38,7 +38,7 @@ export default async function BrowsePage({ searchParams }: Props) {
       title="Browse ideas"
       description={
         (waitingCount ?? 0) > 0
-          ? `Search summaries and sample DAEs. ${topicRegistry.followed.length} following. Review to attach yours.`
+          ? `Search summaries and sample DAEs. ${topicRegistry.followed.length} following. Place yours from there.`
           : `Search the pool by keyword, not by room. ${topicRegistry.followed.length} following.`
       }
       actions={

@@ -28,7 +28,7 @@ interface Props {
 const tabs: Array<{ key: AppTab; href: string; label: string }> = [
   { key: 'now', href: '/now', label: 'Now' },
   { key: 'submit', href: '/submit', label: 'Submit' },
-  { key: 'review', href: '/review', label: 'Review' },
+  { key: 'review', href: '/review', label: 'Place' },
   { key: 'threads', href: '/threads', label: 'Chats' },
   { key: 'browse', href: '/browse', label: 'Browse' },
 ]

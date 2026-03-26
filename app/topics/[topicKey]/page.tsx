@@ -8,6 +8,7 @@ import TopicCurationControls from '@/components/TopicCurationControls'
 import TopicSignalBar from '@/components/TopicSignalBar'
 import { trackAnalyticsEvent } from '@/lib/analytics'
 import { isFounderEmail } from '@/lib/founders'
+import { fetchRoomOutcomeSummaries } from '@/lib/room-outcomes'
 import { fetchTopicHubData, fetchTopicByKey, resolveTopicKey } from '@/lib/topic-hubs'
 import { fetchTopicAliasMap, getTopicAliasSources } from '@/lib/topic-aliases'
 import { fetchTopicCurationStates, getTopicCurationState } from '@/lib/topic-curation'
@@ -94,6 +95,8 @@ export default async function TopicHubPage({ params }: Props) {
   const activePeopleCount = new Set(
     relatedRooms.flatMap((thread) => thread.participants.map((participant) => participant.userId))
   ).size
+  const roomOutcomes = await fetchRoomOutcomeSummaries(relatedRooms.map((thread) => thread.matchId))
+  const workingRoomCount = [...roomOutcomes.values()].filter((summary) => summary.label === 'Working').length
   const topicExamples = [...new Set([...topic.sampleDaes, ...waitingPrompts.map((prompt) => prompt.text)])].slice(0, 6)
 
   after(async () => {
@@ -144,6 +147,9 @@ export default async function TopicHubPage({ params }: Props) {
                 </span>
                 <span className="rounded-full bg-[var(--dae-surface)] px-3 py-1 text-xs font-medium text-[var(--dae-muted)]">
                   {relatedRooms.length} active room{relatedRooms.length === 1 ? '' : 's'}
+                </span>
+                <span className="rounded-full bg-[var(--dae-surface)] px-3 py-1 text-xs font-medium text-[var(--dae-muted)]">
+                  {workingRoomCount} working
                 </span>
                 {aliasSourceCount > 0 ? (
                   <span className="rounded-full bg-[var(--dae-surface)] px-3 py-1 text-xs font-medium text-[var(--dae-muted)]">
@@ -290,12 +296,18 @@ export default async function TopicHubPage({ params }: Props) {
                 Counts and entry points only. Chat conversations stay inside rooms.
               </p>
 
-              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+              <div className="mt-4 grid gap-2 sm:grid-cols-4">
                 <div className="rounded-2xl bg-[var(--dae-surface)] px-4 py-3">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-muted)]">
                     Active rooms
                   </p>
                   <p className="mt-1 text-xl font-semibold text-[var(--dae-ink)]">{relatedRooms.length}</p>
+                </div>
+                <div className="rounded-2xl bg-[var(--dae-surface)] px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-muted)]">
+                    Working
+                  </p>
+                  <p className="mt-1 text-xl font-semibold text-[var(--dae-ink)]">{workingRoomCount}</p>
                 </div>
                 <div className="rounded-2xl bg-[var(--dae-surface)] px-4 py-3">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-muted)]">
@@ -344,7 +356,7 @@ export default async function TopicHubPage({ params }: Props) {
               <div className="mt-4 rounded-2xl bg-[var(--dae-surface)] px-4 py-4">
                 <p className="text-sm leading-6 text-[var(--dae-muted)]">
                   {availableRoomCount > 0
-                    ? `${availableRoomCount} room${availableRoomCount === 1 ? '' : 's'} already exist around this topic. Bring your DAE into Review to see if one fits.`
+                    ? `${availableRoomCount} room${availableRoomCount === 1 ? '' : 's'} already exist around this topic. Bring your DAE into Place to see if one fits.`
                     : 'No visible rooms yet. Add your DAE to help this topic gather.'}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -353,7 +365,7 @@ export default async function TopicHubPage({ params }: Props) {
                       href={waitingCount > 0 ? `/review?topic=${encodeURIComponent(topic.headline)}` : `/submit?draft=${encodeURIComponent(topic.searchQuery)}`}
                       className="rounded-full border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-warm)] hover:opacity-95"
                     >
-                      {waitingCount > 0 ? 'See fit in Review' : 'Add your DAE'}
+                      {waitingCount > 0 ? 'See fit in Place' : 'Add your DAE'}
                     </Link>
                   ) : (
                     <Link

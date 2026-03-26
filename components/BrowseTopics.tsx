@@ -213,7 +213,7 @@ export default function BrowseTopics({
                   href="/review"
                   className="rounded-full border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] px-3 py-1.5 text-sm font-medium text-[var(--dae-accent-warm)] hover:opacity-95"
                 >
-                  Review {waitingCount}
+                  Place {waitingCount}
                 </Link>
               ) : null}
             </div>

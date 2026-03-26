@@ -6,9 +6,11 @@ import JoinThreadControl from '@/components/JoinThreadControl'
 import ThreadOverviewCard from '@/components/ThreadOverviewCard'
 import WaitingDaesList from '@/components/WaitingDaesList'
 import { trackAnalyticsEvent } from '@/lib/analytics'
+import { fetchRoomOutcomeSummaries, getRoomOutcomeSummary } from '@/lib/room-outcomes'
 import { fetchJoinRequestStatesForUser } from '@/lib/thread-join-requests'
 import { getRoomModerationState, fetchRoomModerationStates } from '@/lib/moderation-state'
 import { getRequestUser } from '@/lib/request-user'
+import { canAutoJoinThreadWithFitScore } from '@/lib/thread-join-policy'
 import { scoreThreadAttachmentFit } from '@/lib/thread-fit'
 import { createAdminClient } from '@/lib/supabase/server'
 import { scoreTextPair } from '@/lib/text-similarity'
@@ -101,6 +103,7 @@ export default async function ReviewPage({ searchParams }: Props) {
   const discoverableThreads = discoverThreads.filter(
     (thread) => !getRoomModerationState(roomStates, thread.matchId).hidden
   )
+  const roomOutcomes = await fetchRoomOutcomeSummaries(discoverableThreads.map((thread) => thread.matchId))
   const invitedThread = invitedThreads.find(
     (thread) => !getRoomModerationState(roomStates, thread.matchId).hidden
   )
@@ -128,8 +131,10 @@ export default async function ReviewPage({ searchParams }: Props) {
       }))
       .map((entry) => ({
         ...entry,
+        outcome: getRoomOutcomeSummary(roomOutcomes, entry.thread.matchId),
         weightedScore:
           entry.fit.score +
+          getRoomOutcomeSummary(roomOutcomes, entry.thread.matchId).score * 0.18 +
           entry.focusScore * 0.14 +
           (focusedMatchId && entry.thread.matchId === focusedMatchId ? 0.18 : 0),
       }))
@@ -147,6 +152,12 @@ export default async function ReviewPage({ searchParams }: Props) {
     )
 
   const suggestionCount = suggestionGroups.reduce((total, group) => total + group.suggestions.length, 0)
+  const autoJoinSuggestionCount = suggestionGroups.reduce(
+    (total, group) =>
+      total + group.suggestions.filter((suggestion) => canAutoJoinThreadWithFitScore(suggestion.fit.score)).length,
+    0
+  )
+  const approvalSuggestionCount = Math.max(suggestionCount - autoJoinSuggestionCount, 0)
 
   after(async () => {
     await trackAnalyticsEvent({
@@ -155,6 +166,8 @@ export default async function ReviewPage({ searchParams }: Props) {
       metadata: {
         waitingCount: typedWaitingDaes.length,
         suggestionCount,
+        autoJoinSuggestionCount,
+        approvalSuggestionCount,
         focusedTopic: focusedTopic || null,
         focusedDaeId: focusedDaeId || null,
         focusedMatchId: focusedMatchId || null,
@@ -167,9 +180,13 @@ export default async function ReviewPage({ searchParams }: Props) {
     <AppShell
       activeTab="review"
       userEmail={user.email ?? ''}
-      eyebrow="Review"
-      title="Waiting"
-      description={focusedTopic ? `Attach or remove. Focused on: ${focusedTopic}` : 'Attach or remove.'}
+      eyebrow="Place"
+      title="Place your waiting DAE"
+      description={
+        focusedTopic
+          ? `Choose where it belongs. Focused on: ${focusedTopic}`
+          : 'Choose the best room, request a spot, or leave it in the pool.'
+      }
     >
       {typedWaitingDaes.length === 0 ? (
         <div className="rounded-[28px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-8 text-center shadow-[0_14px_36px_rgba(32,26,22,0.05)]">
@@ -191,6 +208,25 @@ export default async function ReviewPage({ searchParams }: Props) {
         </div>
       ) : (
         <div className="space-y-5">
+          <section className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-[24px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-4 shadow-[0_14px_36px_rgba(32,26,22,0.05)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--dae-muted)]">Waiting</p>
+              <p className="mt-2 text-3xl font-semibold text-[var(--dae-ink)]">{typedWaitingDaes.length}</p>
+            </div>
+            <div className="rounded-[24px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-4 shadow-[0_14px_36px_rgba(32,26,22,0.05)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--dae-muted)]">Suggestions</p>
+              <p className="mt-2 text-3xl font-semibold text-[var(--dae-ink)]">{suggestionCount}</p>
+            </div>
+            <div className="rounded-[24px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-4 shadow-[0_14px_36px_rgba(32,26,22,0.05)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--dae-muted)]">Join now</p>
+              <p className="mt-2 text-3xl font-semibold text-[var(--dae-ink)]">{autoJoinSuggestionCount}</p>
+            </div>
+            <div className="rounded-[24px] border border-[var(--dae-line)] bg-[var(--dae-surface-strong)] p-4 shadow-[0_14px_36px_rgba(32,26,22,0.05)]">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--dae-muted)]">Needs approval</p>
+              <p className="mt-2 text-3xl font-semibold text-[var(--dae-ink)]">{approvalSuggestionCount}</p>
+            </div>
+          </section>
+
           {invitedThread ? (
             <section className="rounded-[28px] border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)]/60 p-4 shadow-[0_14px_36px_rgba(32,26,22,0.05)]">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -199,7 +235,7 @@ export default async function ReviewPage({ searchParams }: Props) {
                     Invited room
                   </p>
                   <p className="mt-1 text-sm text-[var(--dae-ink)]">
-                    Someone shared this room with you. If one of your waiting prompts fits, request to join it.
+                    Someone shared this room with you. If one of your waiting prompts fits, place it here.
                   </p>
                 </div>
                 <Link
@@ -242,7 +278,7 @@ export default async function ReviewPage({ searchParams }: Props) {
                     Near-match spotlight
                   </p>
                   <p className="mt-1 text-sm text-[var(--dae-ink)]">
-                    We pulled the closest rooms higher because this prompt looks almost there.
+                    We pulled the closest rooms higher because this prompt already looks close enough to rescue.
                   </p>
                 </div>
                 <Link
@@ -302,7 +338,7 @@ export default async function ReviewPage({ searchParams }: Props) {
                   </div>
                 ) : (
                   <div className="mt-4 grid gap-3">
-                    {suggestions.map(({ thread, fit, moderation }) => {
+                    {suggestions.map(({ thread, fit, moderation, outcome }) => {
                       const tone = getFitTone(fit.score)
                       const isBestFit = suggestions[0]?.thread.matchId === thread.matchId
                       const isSpotlight = Boolean(
@@ -361,7 +397,19 @@ export default async function ReviewPage({ searchParams }: Props) {
                                 >
                                   {fit.confidenceLabel} / {Math.round(fit.score * 100)}%
                                 </span>
+                                <span
+                                  className={`rounded-full px-3 py-1 text-xs font-medium ${
+                                    outcome.label === 'Working'
+                                      ? 'bg-[var(--dae-accent-soft)] text-[var(--dae-accent)]'
+                                      : outcome.label === 'Risky'
+                                        ? 'bg-[var(--dae-accent-rose-soft)] text-[var(--dae-accent-rose)]'
+                                        : 'bg-[var(--dae-surface)] text-[var(--dae-muted)]'
+                                  }`}
+                                >
+                                  {outcome.label}
+                                </span>
                                 <span className="text-xs text-[var(--dae-muted)]">{fit.reason}</span>
+                                <span className="text-xs text-[var(--dae-muted)]">{outcome.detail}</span>
                               </div>
                             }
                           />
