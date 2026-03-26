@@ -96,8 +96,10 @@ export default function BrowseTopics({
       const haystack = [
         topic.headline,
         topic.summary,
+        topic.whyNow,
         ...topic.sampleDaes,
         ...topic.keywords,
+        ...topic.subthemes,
       ]
         .join(' ')
         .toLowerCase()

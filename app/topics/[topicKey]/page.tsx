@@ -199,6 +199,14 @@ export default async function TopicHubPage({ params }: Props) {
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
+            {topic.subthemes.map((subtheme) => (
+              <span
+                key={`${topic.topicKey}-${subtheme}`}
+                className="rounded-full bg-[var(--dae-accent-cool-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--dae-accent-cool)]"
+              >
+                {subtheme}
+              </span>
+            ))}
             {topic.keywords.map((keyword) => (
               <span
                 key={`${topic.topicKey}-${keyword}`}
@@ -207,6 +215,13 @@ export default async function TopicHubPage({ params }: Props) {
                 {keyword}
               </span>
             ))}
+          </div>
+
+          <div className="mt-4 rounded-2xl bg-[var(--dae-surface)] px-4 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent-rose)]">
+              Why this is moving
+            </p>
+            <p className="mt-2 text-sm leading-6 text-[var(--dae-ink)]">{topic.whyNow}</p>
           </div>
 
           <div className="mt-4 rounded-2xl bg-[var(--dae-surface)] px-4 py-4">

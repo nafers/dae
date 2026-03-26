@@ -51,6 +51,12 @@ interface Props {
   matchConfidence: string
   matchSharedTerms: string[]
   threadMemory: string
+  threadRecap: {
+    headline: string
+    detail: string
+    keywords: string[]
+    unreadCount: number
+  } | null
   topicKey: string
   initialLastSeenAt: string | null
   blockedUserIds: string[]
@@ -83,6 +89,7 @@ export default function ChatThread({
   matchConfidence,
   matchSharedTerms,
   threadMemory,
+  threadRecap,
   topicKey,
   initialLastSeenAt,
   blockedUserIds,
@@ -499,6 +506,27 @@ export default function ChatThread({
               </p>
               <p className="mt-2 text-sm leading-6 text-[var(--dae-muted)]">{threadMemory}</p>
             </div>
+            {threadRecap ? (
+              <div className="mt-3 rounded-2xl bg-[var(--dae-accent-cool-soft)]/55 px-3 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent-cool)]">
+                  Since you were away
+                </p>
+                <p className="mt-2 text-sm font-medium text-[var(--dae-ink)]">{threadRecap.headline}</p>
+                <p className="mt-1 text-sm leading-6 text-[var(--dae-muted)]">{threadRecap.detail}</p>
+                {threadRecap.keywords.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {threadRecap.keywords.map((keyword) => (
+                      <span
+                        key={`${matchId}-${keyword}`}
+                        className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-[var(--dae-accent-cool)]"
+                      >
+                        {keyword}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">

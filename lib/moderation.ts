@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { fetchRoomModerationStates } from '@/lib/moderation-state'
+import { fetchRoomOutcomeSummaries, getRoomOutcomeSummary } from '@/lib/room-outcomes'
 import { fetchThreadDirectory, type ThreadDirectoryItem } from '@/lib/thread-directory'
 
 interface ModerationEventRow {
@@ -24,6 +25,16 @@ export interface ModerationReportItem {
   roomHidden: boolean
   joinLocked: boolean
   roomReportCount: number
+}
+
+export interface FounderRiskRoom {
+  room: ThreadDirectoryItem
+  roomHidden: boolean
+  joinLocked: boolean
+  reportCount: number
+  lastActionAt: string | null
+  outcome: ReturnType<typeof getRoomOutcomeSummary>
+  riskScore: number
 }
 
 function buildReportKey(row: ModerationEventRow) {
@@ -113,4 +124,48 @@ export async function fetchModerationQueue(currentUserId: string) {
     unresolved,
     resolved,
   }
+}
+
+export async function fetchFounderRiskRooms(currentUserId: string) {
+  const rooms = await fetchThreadDirectory({
+    currentUserId,
+    scope: 'all',
+    includeState: false,
+    limit: 32,
+  })
+  const [roomStates, roomOutcomes] = await Promise.all([
+    fetchRoomModerationStates(rooms.map((room) => room.matchId)),
+    fetchRoomOutcomeSummaries(rooms.map((room) => room.matchId)),
+  ])
+
+  return rooms
+    .map((room) => {
+      const moderation = roomStates.get(room.matchId) ?? {
+        hidden: false,
+        joinLocked: false,
+        reportCount: 0,
+        lastActionAt: null,
+      }
+      const outcome = getRoomOutcomeSummary(roomOutcomes, room.matchId)
+      const riskScore =
+        moderation.reportCount * 0.9 +
+        (moderation.hidden ? 1.2 : 0) +
+        (moderation.joinLocked ? 0.8 : 0) +
+        outcome.removalVoteCount * 0.35 +
+        outcome.removedCount * 0.8 +
+        (outcome.label === 'Risky' ? 1 : outcome.label === 'Mixed' ? 0.3 : -0.2)
+
+      return {
+        room,
+        roomHidden: moderation.hidden,
+        joinLocked: moderation.joinLocked,
+        reportCount: moderation.reportCount,
+        lastActionAt: moderation.lastActionAt,
+        outcome,
+        riskScore,
+      } satisfies FounderRiskRoom
+    })
+    .filter((room) => room.riskScore > 0 || room.reportCount > 0)
+    .sort((a, b) => b.riskScore - a.riskScore)
+    .slice(0, 8)
 }

@@ -10,6 +10,7 @@ import { createAdminClient } from '@/lib/supabase/server'
 import { fetchPendingJoinRequestsForMatch } from '@/lib/thread-join-requests'
 import { userHasBlockedParticipantInMatch } from '@/lib/thread-access'
 import { buildThreadMemorySummary } from '@/lib/thread-memory'
+import { buildThreadRecap } from '@/lib/thread-recap'
 import { fetchThreadUserStates, getThreadUserState } from '@/lib/thread-state'
 import { scoreThreadAttachmentFit } from '@/lib/thread-fit'
 import { getTopicPresentation } from '@/lib/topic-intelligence'
@@ -163,6 +164,16 @@ export default async function ThreadPage({ params, searchParams }: Props) {
     })),
     matchReason: myFit.reason,
   })
+  const threadRecap = buildThreadRecap({
+    participants: orderedParticipants,
+    messages: (initialMessages ?? []).map((message) => ({
+      sender_id: message.sender_id,
+      content: message.content,
+      created_at: message.created_at,
+    })),
+    lastSeenAt: initialThreadState.lastSeenAt,
+    currentUserId: user.id,
+  })
   const initialFeedback = ((feedbackEvent?.metadata as { verdict?: MatchFeedback } | null)?.verdict ??
     null) as MatchFeedback
 
@@ -205,6 +216,7 @@ export default async function ThreadPage({ params, searchParams }: Props) {
         matchConfidence={myFit.confidenceLabel}
         matchSharedTerms={myFit.sharedTerms}
         threadMemory={threadMemory}
+        threadRecap={threadRecap}
         topicKey={topicPresentation.topicKey}
         initialLastSeenAt={initialThreadState.lastSeenAt}
         blockedUserIds={[...blockedUserIds]}

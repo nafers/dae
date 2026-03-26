@@ -23,6 +23,8 @@ export interface BrowseTopicItem {
   label: string
   headline: string
   summary: string
+  whyNow: string
+  subthemes: string[]
   sampleDaes: string[]
   keywords: string[]
   searchQuery: string
@@ -157,6 +159,8 @@ export async function fetchBrowseTopics(limit = 80) {
         label: presentation.label,
         headline: topic.headline,
         summary: presentation.summary || topic.summary,
+        whyNow: presentation.whyNow,
+        subthemes: presentation.subthemes,
         sampleDaes: topic.sampleDaes,
         keywords: presentation.keywords.length ? presentation.keywords : topic.keywords,
         searchQuery: presentation.searchQuery || topic.headline,

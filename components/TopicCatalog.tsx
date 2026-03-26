@@ -60,8 +60,10 @@ export default function TopicCatalog({ topics, waitingCount }: Props) {
           topic.label,
           topic.headline,
           topic.summary,
+          topic.whyNow,
           topic.searchQuery,
           ...topic.keywords,
+          ...topic.subthemes,
           ...topic.sampleDaes,
         ]
           .join(' ')
@@ -203,6 +205,17 @@ export default function TopicCatalog({ topics, waitingCount }: Props) {
                     <span className="rounded-full bg-[var(--dae-accent-rose-soft)] px-3 py-1 text-xs font-medium text-[var(--dae-accent-rose)]">
                       {topic.label}
                     </span>
+                    <span
+                      className={`rounded-full px-3 py-1 text-xs font-medium ${
+                        topic.roomHealthLabel === 'Working'
+                          ? 'bg-[var(--dae-accent-soft)] text-[var(--dae-accent)]'
+                          : topic.roomHealthLabel === 'Risky'
+                            ? 'bg-[var(--dae-accent-rose-soft)] text-[var(--dae-accent-rose)]'
+                            : 'bg-[var(--dae-surface)] text-[var(--dae-muted)]'
+                      }`}
+                    >
+                      {topic.roomHealthLabel}
+                    </span>
                     {topic.isPinned ? (
                       <span className="rounded-full bg-[var(--dae-accent-cool-soft)] px-3 py-1 text-xs font-medium text-[var(--dae-accent-cool)]">
                         Pinned
@@ -216,6 +229,7 @@ export default function TopicCatalog({ topics, waitingCount }: Props) {
                   </div>
                   <h2 className="mt-2 text-xl font-semibold leading-8 text-[var(--dae-ink)]">{topic.headline}</h2>
                   <p className="mt-2 text-sm leading-6 text-[var(--dae-muted)]">{topic.summary}</p>
+                  <p className="mt-2 text-sm leading-6 text-[var(--dae-ink)]">{topic.whyNow}</p>
                 </div>
 
                 <div className="flex flex-wrap gap-2">
@@ -226,10 +240,26 @@ export default function TopicCatalog({ topics, waitingCount }: Props) {
                     {topic.uniqueUserCount} people
                   </span>
                   <span className="rounded-full bg-[var(--dae-surface)] px-3 py-1 text-xs font-medium text-[var(--dae-muted)]">
+                    {topic.activeRoomCount} rooms
+                  </span>
+                  <span className="rounded-full bg-[var(--dae-surface)] px-3 py-1 text-xs font-medium text-[var(--dae-muted)]">
                     {formatTimestamp(topic.latestAt)}
                   </span>
                 </div>
               </div>
+
+              {topic.subthemes.length > 0 ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {topic.subthemes.map((subtheme) => (
+                    <span
+                      key={`${topic.topicKey}-${subtheme}`}
+                      className="rounded-full bg-[var(--dae-accent-cool-soft)] px-2.5 py-1 text-[11px] font-medium text-[var(--dae-accent-cool)]"
+                    >
+                      {subtheme}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
 
               {topic.keywords.length > 0 ? (
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -245,6 +275,8 @@ export default function TopicCatalog({ topics, waitingCount }: Props) {
                   ))}
                 </div>
               ) : null}
+
+              <p className="mt-3 text-xs text-[var(--dae-muted)]">{topic.roomHealthDetail}</p>
 
               <div className="mt-3 grid gap-2 md:grid-cols-3">
                 {topic.sampleDaes.slice(0, 3).map((sample) => (

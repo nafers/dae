@@ -74,6 +74,8 @@ export default function SubmitForm({ initialText = '', initialInviteMatchId = ''
   const maxChars = 280
   const minChars = 10
   const promptTips = getPromptTips(text)
+  const bestRoom = waitingResult?.nearRooms[0] ?? null
+  const bestTopic = waitingResult?.nearTopics[0] ?? null
 
   useEffect(() => {
     setText(initialText)
@@ -197,6 +199,79 @@ export default function SubmitForm({ initialText = '', initialInviteMatchId = ''
           <p className="text-sm leading-6 text-[var(--dae-ink)]">{normalizedText}</p>
         </div>
 
+        <div className="rounded-2xl border border-[var(--dae-line)] bg-white/80 px-4 py-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent-cool)]">
+                Best next step
+              </p>
+              {bestRoom ? (
+                <>
+                  <p className="mt-2 text-base font-semibold text-[var(--dae-ink)]">{bestRoom.headline}</p>
+                  <p className="mt-1 text-sm leading-6 text-[var(--dae-muted)]">
+                    {bestRoom.joinMode === 'join_now'
+                      ? 'This is strong enough to join right away.'
+                      : 'This is close, but the room should admit you first.'}{' '}
+                    {bestRoom.roomHealthDetail}
+                  </p>
+                </>
+              ) : bestTopic ? (
+                <>
+                  <p className="mt-2 text-base font-semibold text-[var(--dae-ink)]">{bestTopic.label}</p>
+                  <p className="mt-1 text-sm leading-6 text-[var(--dae-muted)]">
+                    No room is strong enough yet, but this topic already looks close to what you meant.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="mt-2 text-base font-semibold text-[var(--dae-ink)]">Leave it in the pool for now</p>
+                  <p className="mt-1 text-sm leading-6 text-[var(--dae-muted)]">
+                    Nothing is close enough yet. Keep it waiting, write another one, or browse nearby topics.
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {bestRoom ? (
+                <button
+                  type="button"
+                  onClick={() => void continueIntoRoom(bestRoom)}
+                  disabled={pendingRoomIds.includes(bestRoom.matchId)}
+                  className="rounded-full border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)] px-3 py-1.5 text-xs font-medium text-[var(--dae-accent-cool)] hover:opacity-95 disabled:opacity-60"
+                >
+                  {pendingRoomIds.includes(bestRoom.matchId)
+                    ? bestRoom.joinMode === 'join_now'
+                      ? 'Joining...'
+                      : 'Requesting...'
+                    : bestRoom.joinMode === 'join_now'
+                      ? 'Join now'
+                      : 'Request to join'}
+                </button>
+              ) : bestTopic ? (
+                <Link
+                  href={`/topics/${encodeURIComponent(bestTopic.topicKey)}`}
+                  className="rounded-full border border-[var(--dae-accent-rose)] bg-[var(--dae-accent-rose-soft)] px-3 py-1.5 text-xs font-medium text-[var(--dae-accent-rose)] hover:opacity-95"
+                >
+                  Open topic
+                </Link>
+              ) : null}
+              <Link
+                href={
+                  waitingResult?.daeId && bestRoom
+                    ? `/review?daeId=${encodeURIComponent(waitingResult.daeId)}&matchId=${encodeURIComponent(bestRoom.matchId)}`
+                    : waitingResult?.daeId && bestTopic
+                      ? `/review?daeId=${encodeURIComponent(waitingResult.daeId)}&topic=${encodeURIComponent(bestTopic.label)}`
+                      : '/review'
+                }
+                className="rounded-full border border-[var(--dae-accent-warm)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-accent-warm)] hover:bg-[var(--dae-accent-warm-soft)]"
+              >
+                Open place
+              </Link>
+            </div>
+          </div>
+        </div>
+
         {waitingResult && (waitingResult.nearRooms.length > 0 || waitingResult.nearTopics.length > 0 || initialInviteMatchId) ? (
           <div className="space-y-3 rounded-2xl bg-white/80 px-4 py-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -205,7 +280,7 @@ export default function SubmitForm({ initialText = '', initialInviteMatchId = ''
                   Almost there
                 </p>
                 <p className="mt-1 text-sm text-[var(--dae-muted)]">
-                  These look close enough to place now instead of only waiting.
+                  These are the closest places to land next if you do not want to just wait.
                 </p>
               </div>
               <Link
