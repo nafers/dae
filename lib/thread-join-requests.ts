@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server'
+import { isMissingRelationError } from '@/lib/supabase-fallback'
 
 interface JoinRequestEventRow {
   id: string
@@ -98,6 +99,36 @@ function buildRequestMap(rows: JoinRequestEventRow[]) {
 
 async function fetchJoinRequestRows(limit = 240) {
   const admin = createAdminClient()
+  const { data: tableRows, error: tableError } = await admin
+    .from('thread_join_requests')
+    .select(
+      'id, match_id, requester_id, dae_id, dae_text, source, fit_score, fit_reason, topic, state, responder_id, created_at, resolved_at'
+    )
+    .order('created_at', { ascending: false })
+    .limit(limit)
+
+  if (!tableError && Array.isArray(tableRows)) {
+    return tableRows.map((row) => ({
+      requestId: row.id,
+      matchId: row.match_id,
+      requesterId: row.requester_id,
+      daeId: row.dae_id,
+      daeText: row.dae_text,
+      source: row.source,
+      fitScore: row.fit_score,
+      fitReason: row.fit_reason,
+      topic: row.topic,
+      createdAt: row.created_at,
+      state: row.state,
+      resolvedAt: row.resolved_at,
+      responderId: row.responder_id,
+    })) as ThreadJoinRequest[]
+  }
+
+  if (tableError && !isMissingRelationError(tableError)) {
+    console.error('Thread join request fetch error:', tableError)
+  }
+
   const { data } = await admin
     .from('analytics_events')
     .select('id, event_name, user_id, match_id, metadata, created_at')
@@ -105,7 +136,7 @@ async function fetchJoinRequestRows(limit = 240) {
     .order('created_at', { ascending: false })
     .limit(limit)
 
-  return (data ?? []) as JoinRequestEventRow[]
+  return [...buildRequestMap((data ?? []) as JoinRequestEventRow[]).values()]
 }
 
 export async function fetchJoinRequestsForMatches(matchIds: string[]) {
@@ -115,7 +146,7 @@ export async function fetchJoinRequestsForMatches(matchIds: string[]) {
   }
 
   const rows = await fetchJoinRequestRows()
-  return [...buildRequestMap(rows).values()]
+  return rows
     .filter((request) => uniqueMatchIds.includes(request.matchId))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 }
@@ -128,7 +159,7 @@ export async function fetchPendingJoinRequestsForMatch(matchId: string) {
 
 export async function fetchJoinRequestStatesForUser(userId: string) {
   const rows = await fetchJoinRequestRows()
-  return [...buildRequestMap(rows).values()]
+  return rows
     .filter((request) => request.requesterId === userId)
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
 }

@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server'
 import { trackAnalyticsEvent } from '@/lib/analytics'
-import { fetchBlockedUserIdsForUser } from '@/lib/blocks'
 import { generateHandle } from '@/lib/handles'
 import { fetchRoomModerationStates, getRoomModerationState } from '@/lib/moderation-state'
 import { getRequestUser } from '@/lib/request-user'
 import { createAdminClient } from '@/lib/supabase/server'
+import { userHasBlockedParticipantInMatch } from '@/lib/thread-access'
 
 export async function POST(request: Request) {
   try {
@@ -33,8 +33,7 @@ export async function POST(request: Request) {
     }
 
     const admin = createAdminClient()
-    const blockedUserIds = await fetchBlockedUserIdsForUser(user.id)
-    const [{ data: thread }, { data: dae }, { data: existingParticipant }] = await Promise.all([
+    const [{ data: thread }, { data: dae }, { data: existingParticipant }, hasActiveBlock] = await Promise.all([
       admin.from('matches').select('id').eq('id', matchId).maybeSingle(),
       admin
         .from('daes')
@@ -48,6 +47,10 @@ export async function POST(request: Request) {
         .eq('match_id', matchId)
         .eq('user_id', user.id)
         .maybeSingle(),
+      userHasBlockedParticipantInMatch({
+        currentUserId: user.id,
+        matchId,
+      }),
     ])
 
     if (!thread) {
@@ -66,6 +69,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'You are already in this chat' }, { status: 400 })
     }
 
+    if (hasActiveBlock) {
+      return NextResponse.json({ error: 'A block is active in this room' }, { status: 400 })
+    }
+
     const [{ data: threadParticipants }, { data: priorHandleRows }] = await Promise.all([
       admin
         .from('thread_participants')
@@ -76,10 +83,6 @@ export async function POST(request: Request) {
         .select('handle')
         .eq('user_id', user.id),
     ])
-
-    if ((threadParticipants ?? []).some((participant) => blockedUserIds.has(participant.user_id))) {
-      return NextResponse.json({ error: 'You blocked someone in this room' }, { status: 400 })
-    }
 
     const excludedHandles = new Set<string>()
 

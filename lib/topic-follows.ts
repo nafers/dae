@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server'
+import { isMissingRelationError } from '@/lib/supabase-fallback'
 
 interface TopicFollowEventRow {
   event_name: string
@@ -18,6 +19,31 @@ const FOLLOW_EVENTS = ['topic_followed', 'topic_unfollowed'] as const
 
 export async function fetchActiveTopicFollows(userId: string) {
   const admin = createAdminClient()
+  const { data: followRows, error: followError } = await admin
+    .from('topic_follows')
+    .select('topic_key, headline, label, search_query, created_at, updated_at')
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false })
+
+  if (!followError && Array.isArray(followRows)) {
+    return new Map(
+      followRows.map((row) => [
+        row.topic_key,
+        {
+          topicKey: row.topic_key,
+          headline: row.headline,
+          label: row.label,
+          searchQuery: row.search_query,
+          followedAt: row.updated_at ?? row.created_at,
+        } satisfies TopicFollowState,
+      ])
+    )
+  }
+
+  if (followError && !isMissingRelationError(followError)) {
+    console.error('Topic follow fetch error:', followError)
+  }
+
   const { data } = await admin
     .from('analytics_events')
     .select('event_name, created_at, metadata')

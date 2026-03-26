@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server'
+import { isMissingRelationError } from '@/lib/supabase-fallback'
 
 interface ModerationStateRow {
   event_name: string
@@ -30,6 +31,29 @@ export async function fetchRoomModerationStates(matchIds: string[]) {
   }
 
   const admin = createAdminClient()
+  const { data: tableRows, error: tableError } = await admin
+    .from('room_moderation_states')
+    .select('match_id, hidden, join_locked, report_count, updated_at')
+    .in('match_id', uniqueMatchIds)
+
+  if (!tableError && Array.isArray(tableRows)) {
+    for (const matchId of uniqueMatchIds) {
+      const row = tableRows.find((entry) => entry.match_id === matchId)
+      stateMap.set(matchId, {
+        hidden: Boolean(row?.hidden),
+        joinLocked: Boolean(row?.join_locked),
+        reportCount: row?.report_count ?? 0,
+        lastActionAt: row?.updated_at ?? null,
+      })
+    }
+
+    return stateMap
+  }
+
+  if (tableError && !isMissingRelationError(tableError)) {
+    console.error('Room moderation fetch error:', tableError)
+  }
+
   const { data } = await admin
     .from('analytics_events')
     .select('event_name, match_id, created_at')

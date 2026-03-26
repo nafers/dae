@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server'
+import { isMissingRelationError } from '@/lib/supabase-fallback'
 
 interface ThreadParticipantRow {
   user_id: string
@@ -65,6 +66,58 @@ export async function fetchThreadRemovalVoteSummary({
     }
   }
 
+  const activeParticipantIds = new Set(participants.map((participant) => participant.user_id))
+
+  const { data: voteRows, error: voteError } = await admin
+    .from('thread_removal_votes')
+    .select('target_user_id, voter_user_id')
+    .eq('match_id', matchId)
+
+  if (!voteError && Array.isArray(voteRows)) {
+    const voterSets = new Map<string, Set<string>>()
+
+    for (const row of voteRows) {
+      const targetUserId = row.target_user_id
+      const voterUserId = row.voter_user_id
+
+      if (
+        typeof targetUserId !== 'string' ||
+        typeof voterUserId !== 'string' ||
+        targetUserId === voterUserId ||
+        !activeParticipantIds.has(voterUserId)
+      ) {
+        continue
+      }
+
+      const voters = voterSets.get(targetUserId) ?? new Set<string>()
+      voters.add(voterUserId)
+      voterSets.set(targetUserId, voters)
+    }
+
+    return {
+      participantCount: participants.length,
+      threshold,
+      items: participants
+        .filter((participant) => participant.user_id !== currentUserId)
+        .map((participant) => {
+          const voters = voterSets.get(participant.user_id) ?? new Set<string>()
+
+          return {
+            targetUserId: participant.user_id,
+            targetHandle: participant.handle,
+            daeId: participant.dae_id,
+            votesCount: voters.size,
+            threshold,
+            myVote: voters.has(currentUserId),
+          } satisfies ThreadRemovalVoteSummary
+        }),
+    }
+  }
+
+  if (voteError && !isMissingRelationError(voteError)) {
+    console.error('Thread removal vote fetch error:', voteError)
+  }
+
   const { data: voteEvents } = await admin
     .from('analytics_events')
     .select('event_name, user_id, metadata, created_at')
@@ -75,8 +128,6 @@ export async function fetchThreadRemovalVoteSummary({
 
   const voterSets = new Map<string, Set<string>>()
   const removedAtByTarget = new Map<string, string>()
-  const activeParticipantIds = new Set(participants.map((participant) => participant.user_id))
-
   for (const event of (voteEvents ?? []) as RemovalVoteEventRow[]) {
     const targetUserId =
       typeof event.metadata?.targetUserId === 'string' ? event.metadata.targetUserId : null

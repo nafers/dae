@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { trackAnalyticsEvent } from '@/lib/analytics'
 import { getRequestUser } from '@/lib/request-user'
 import { createAdminClient } from '@/lib/supabase/server'
+import { isMissingRelationError } from '@/lib/supabase-fallback'
 
 type ThreadAction = 'seen' | 'mute' | 'unmute' | 'hide' | 'unhide' | 'report'
 
@@ -61,6 +62,63 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'You do not have access to this thread' }, { status: 403 })
     }
 
+    const timestamp = new Date().toISOString()
+    const reportReason = threadAction === 'report' ? sanitizeReason(reason) ?? 'other' : null
+    const threadStatePatch = {
+      user_id: user.id,
+      match_id: matchId,
+      muted: threadAction === 'mute' ? true : threadAction === 'unmute' ? false : undefined,
+      hidden: threadAction === 'hide' ? true : threadAction === 'unhide' ? false : undefined,
+      last_seen_at:
+        threadAction === 'seen' || threadAction === 'mute' || threadAction === 'unmute'
+          ? timestamp
+          : undefined,
+      last_reported_at: threadAction === 'report' ? timestamp : undefined,
+      last_report_reason: threadAction === 'report' ? reportReason : undefined,
+      updated_at: timestamp,
+    }
+
+    const { error: threadStateError } = await admin.from('thread_user_states').upsert(threadStatePatch, {
+      onConflict: 'user_id,match_id',
+    })
+
+    if (threadStateError && !isMissingRelationError(threadStateError)) {
+      console.error('Thread state upsert error:', threadStateError)
+      return NextResponse.json({ error: 'Unable to update this thread' }, { status: 500 })
+    }
+
+    if (threadAction === 'report') {
+      const { data: roomStateRow, error: roomStateFetchError } = await admin
+        .from('room_moderation_states')
+        .select('report_count')
+        .eq('match_id', matchId)
+        .maybeSingle()
+
+      if (roomStateFetchError && !isMissingRelationError(roomStateFetchError)) {
+        console.error('Room moderation fetch error:', roomStateFetchError)
+        return NextResponse.json({ error: 'Unable to report this thread' }, { status: 500 })
+      }
+
+      if (!roomStateFetchError) {
+        const { error: roomStateUpsertError } = await admin.from('room_moderation_states').upsert(
+          {
+            match_id: matchId,
+            report_count: (roomStateRow?.report_count ?? 0) + 1,
+            updated_by: user.id,
+            updated_at: timestamp,
+          },
+          {
+            onConflict: 'match_id',
+          }
+        )
+
+        if (roomStateUpsertError) {
+          console.error('Room moderation upsert error:', roomStateUpsertError)
+          return NextResponse.json({ error: 'Unable to report this thread' }, { status: 500 })
+        }
+      }
+    }
+
     await trackAnalyticsEvent({
       eventName: actionEventMap[threadAction],
       userId: user.id,
@@ -69,7 +127,7 @@ export async function POST(request: Request) {
       metadata:
         threadAction === 'report'
           ? {
-              reason: sanitizeReason(reason) ?? 'other',
+              reason: reportReason,
             }
           : null,
     })

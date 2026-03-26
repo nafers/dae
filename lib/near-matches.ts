@@ -1,5 +1,6 @@
 import { fetchCachedBrowseTopics } from '@/lib/browse-directory'
 import { fetchRoomModerationStates, getRoomModerationState } from '@/lib/moderation-state'
+import { canAutoJoinThreadWithFitScore } from '@/lib/thread-join-policy'
 import { chooseRepresentativeText, getTopicLabel } from '@/lib/topic-label'
 import { scoreTextPair } from '@/lib/text-similarity'
 import { fetchThreadDirectory } from '@/lib/thread-directory'
@@ -22,6 +23,8 @@ export interface NearRoomMatch {
   confidenceLabel: string
   reason: string
   matchPercent: number
+  fitScore: number
+  joinMode: 'join_now' | 'request'
 }
 
 export async function fetchNearMatches({
@@ -92,12 +95,25 @@ export async function fetchNearMatches({
         reason: fit.reason,
         matchPercent: Math.round(fit.score * 100),
         score: fit.score,
+        fitScore: fit.score,
+        joinMode: canAutoJoinThreadWithFitScore(fit.score) ? ('join_now' as const) : ('request' as const),
       }
     })
     .filter((thread) => thread.score >= 0.42)
     .sort((a, b) => b.score - a.score)
     .slice(0, 3)
-    .map(({ score: _score, ...thread }) => thread satisfies NearRoomMatch)
+    .map((thread) => ({
+      matchId: thread.matchId,
+      topicLabel: thread.topicLabel,
+      headline: thread.headline,
+      participantCount: thread.participantCount,
+      latestActivityAt: thread.latestActivityAt,
+      confidenceLabel: thread.confidenceLabel,
+      reason: thread.reason,
+      matchPercent: thread.matchPercent,
+      fitScore: thread.fitScore,
+      joinMode: thread.joinMode,
+    }) satisfies NearRoomMatch)
 
   return {
     nearTopics,

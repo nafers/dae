@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server'
+import { isMissingRelationError } from '@/lib/supabase-fallback'
 
 interface TopicCurationRow {
   event_name: string
@@ -28,6 +29,28 @@ export async function fetchTopicCurationStates(topicKeys: string[]) {
   }
 
   const admin = createAdminClient()
+  const { data: topicRows, error: topicError } = await admin
+    .from('topic_registry_state')
+    .select('topic_key, pinned, hidden, updated_at')
+    .in('topic_key', uniqueTopicKeys)
+
+  if (!topicError && Array.isArray(topicRows)) {
+    for (const topicKey of uniqueTopicKeys) {
+      const row = topicRows.find((entry) => entry.topic_key === topicKey)
+      stateMap.set(topicKey, {
+        hidden: Boolean(row?.hidden),
+        pinned: Boolean(row?.pinned),
+        lastActionAt: row?.updated_at ?? null,
+      })
+    }
+
+    return stateMap
+  }
+
+  if (topicError && !isMissingRelationError(topicError)) {
+    console.error('Topic curation fetch error:', topicError)
+  }
+
   const { data } = await admin
     .from('analytics_events')
     .select('event_name, metadata, created_at')

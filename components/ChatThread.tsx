@@ -129,6 +129,14 @@ export default function ChatThread({
       : []
   const unreadParticipantCount = new Set(unreadMessages.map((message) => message.sender_id)).size
   const hasUnreadSinceLastVisit = unreadMessages.length > 0
+  const unreadSummary = unreadMessages
+    .slice(-2)
+    .map((message) => {
+      const sender = participantByUserId.get(message.sender_id)
+      const speaker = sender?.isMe ? 'You' : sender?.handle ?? 'Someone'
+      return `${speaker}: ${message.content}`
+    })
+    .join(' | ')
 
   function mergeMessages(nextMessages: Message[]) {
     setMessages((prev) => {
@@ -585,12 +593,17 @@ export default function ChatThread({
       >
         {hasUnreadSinceLastVisit ? (
           <div className="sticky top-0 z-10 -mt-1 mb-3 flex items-center justify-between gap-3 rounded-2xl border border-[var(--dae-accent-cool)] bg-[rgba(238,248,255,0.96)] px-3 py-2 backdrop-blur">
-            <p className="text-xs text-[var(--dae-ink)]">
-              <span className="font-semibold text-[var(--dae-accent-cool)]">
-                {unreadMessages.length} new
-              </span>{' '}
-              since you were away from {unreadParticipantCount} {unreadParticipantCount === 1 ? 'person' : 'people'}
-            </p>
+            <div className="min-w-0">
+              <p className="text-xs text-[var(--dae-ink)]">
+                <span className="font-semibold text-[var(--dae-accent-cool)]">
+                  {unreadMessages.length} new
+                </span>{' '}
+                since you were away from {unreadParticipantCount} {unreadParticipantCount === 1 ? 'person' : 'people'}
+              </p>
+              {unreadSummary ? (
+                <p className="mt-1 line-clamp-2 text-[11px] text-[var(--dae-muted)]">{unreadSummary}</p>
+              ) : null}
+            </div>
             <button
               type="button"
               onClick={() => scrollToUnread()}

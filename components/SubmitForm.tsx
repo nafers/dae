@@ -66,6 +66,7 @@ export default function SubmitForm({ initialText = '', initialInviteMatchId = ''
   const [status, setStatus] = useState<'idle' | 'waiting' | 'error'>('idle')
   const [waitingResult, setWaitingResult] = useState<WaitingResult | null>(null)
   const [error, setError] = useState('')
+  const [pendingRoomIds, setPendingRoomIds] = useState<string[]>([])
   const router = useRouter()
 
   const normalizedText = normalizePrompt(text)
@@ -79,7 +80,64 @@ export default function SubmitForm({ initialText = '', initialInviteMatchId = ''
     setError('')
     setStatus('idle')
     setWaitingResult(null)
+    setPendingRoomIds([])
   }, [initialText])
+
+  async function continueIntoRoom(room: NearRoomMatch) {
+    if (!waitingResult?.daeId || pendingRoomIds.includes(room.matchId)) {
+      return
+    }
+
+    setPendingRoomIds((current) => [...current, room.matchId])
+    setError('')
+
+    try {
+      const joinNow = room.joinMode === 'join_now'
+      const response = await fetch(joinNow ? '/api/threads/join' : '/api/thread-join-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          joinNow
+            ? {
+                matchId: room.matchId,
+                daeId: waitingResult.daeId,
+                sourceContext: {
+                  source: 'submit_near_match',
+                  fitScore: room.fitScore,
+                  fitReason: room.reason,
+                },
+              }
+            : {
+                action: 'request',
+                matchId: room.matchId,
+                daeId: waitingResult.daeId,
+                sourceContext: {
+                  source: 'submit_near_match',
+                  fitScore: room.fitScore,
+                  fitReason: room.reason,
+                },
+              }
+        ),
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(typeof data?.error === 'string' ? data.error : 'Unable to continue into this room.')
+      }
+
+      if (joinNow) {
+        router.push(`/threads/${room.matchId}`)
+        return
+      }
+
+      router.push(
+        `/review?daeId=${encodeURIComponent(waitingResult.daeId)}&matchId=${encodeURIComponent(room.matchId)}`
+      )
+    } catch (joinError) {
+      setError(joinError instanceof Error ? joinError.message : 'Unable to continue into this room.')
+      setPendingRoomIds((current) => current.filter((matchId) => matchId !== room.matchId))
+    }
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -105,6 +163,7 @@ export default function SubmitForm({ initialText = '', initialInviteMatchId = ''
         return
       } else {
         setStatus('waiting')
+        setPendingRoomIds([])
         setWaitingResult({
           daeId: typeof data?.daeId === 'string' ? data.daeId : '',
           nearRooms: Array.isArray(data?.nearRooms) ? (data.nearRooms as NearRoomMatch[]) : [],
@@ -180,15 +239,32 @@ export default function SubmitForm({ initialText = '', initialInviteMatchId = ''
                       </span>
                     </div>
                     <p className="mt-2 text-xs text-[var(--dae-muted)]">
-                      {room.reason} • {room.participantCount} people
+                      {room.reason} | {room.participantCount} people
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void continueIntoRoom(room)}
+                        disabled={pendingRoomIds.includes(room.matchId)}
+                        className="rounded-full border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)] px-3 py-1.5 text-xs font-medium text-[var(--dae-accent-cool)] hover:opacity-95 disabled:opacity-60"
+                      >
+                        {pendingRoomIds.includes(room.matchId)
+                          ? room.joinMode === 'join_now'
+                            ? 'Joining...'
+                            : 'Requesting...'
+                          : room.joinMode === 'join_now'
+                            ? 'Join now'
+                            : 'Request to join'}
+                      </button>
                       <Link
                         href={`/review?daeId=${encodeURIComponent(waitingResult.daeId)}&matchId=${encodeURIComponent(room.matchId)}`}
-                        className="rounded-full border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)] px-3 py-1.5 text-xs font-medium text-[var(--dae-accent-cool)] hover:opacity-95"
+                        className="rounded-full border border-[var(--dae-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
                       >
-                        Check this room
+                        More options
                       </Link>
+                      <span className="rounded-full bg-[var(--dae-surface)] px-3 py-1 text-[11px] font-medium text-[var(--dae-muted)]">
+                        {room.joinMode === 'join_now' ? 'Auto-admit' : 'Needs admission'}
+                      </span>
                     </div>
                   </div>
                 ))}

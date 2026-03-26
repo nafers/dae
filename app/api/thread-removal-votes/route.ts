@@ -7,6 +7,7 @@ import {
 } from '@/lib/thread-removal-votes'
 import { getRequestUser } from '@/lib/request-user'
 import { createAdminClient } from '@/lib/supabase/server'
+import { isMissingRelationError } from '@/lib/supabase-fallback'
 
 async function ensureParticipant(matchId: string, userId: string) {
   const admin = createAdminClient()
@@ -116,6 +117,23 @@ export async function POST(request: Request) {
       },
     ])
 
+    const { error: voteInsertError } = await admin.from('thread_removal_votes').upsert(
+      {
+        match_id: matchId,
+        target_user_id: targetUserId,
+        voter_user_id: user.id,
+      },
+      {
+        onConflict: 'match_id,target_user_id,voter_user_id',
+        ignoreDuplicates: true,
+      }
+    )
+
+    if (voteInsertError && !isMissingRelationError(voteInsertError)) {
+      console.error('Thread removal vote insert error:', voteInsertError)
+      return NextResponse.json({ error: 'Unable to register this vote.' }, { status: 500 })
+    }
+
     const voteSummaryAfter = await fetchThreadRemovalVoteSummary({
       matchId,
       currentUserId: user.id,
@@ -169,6 +187,16 @@ export async function POST(request: Request) {
     if (daeUpdateError) {
       console.error('Thread removal vote dae update error:', daeUpdateError)
       return NextResponse.json({ error: 'Removed them from the room, but could not reopen their DAE.' }, { status: 500 })
+    }
+
+    const { error: voteDeleteError } = await admin
+      .from('thread_removal_votes')
+      .delete()
+      .eq('match_id', matchId)
+      .or(`target_user_id.eq.${targetUserId},voter_user_id.eq.${targetUserId}`)
+
+    if (voteDeleteError && !isMissingRelationError(voteDeleteError)) {
+      console.error('Thread removal vote cleanup error:', voteDeleteError)
     }
 
     await trackAnalyticsEvents([

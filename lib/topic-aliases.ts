@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server'
+import { isMissingRelationError } from '@/lib/supabase-fallback'
 
 interface TopicAliasEventRow {
   event_name: string
@@ -10,6 +11,21 @@ const TOPIC_ALIAS_EVENTS = ['topic_alias_set', 'topic_alias_cleared'] as const
 
 export async function fetchTopicAliasMap() {
   const admin = createAdminClient()
+  const { data: topicRows, error: topicError } = await admin
+    .from('topic_registry_state')
+    .select('topic_key, alias_target_key')
+    .not('alias_target_key', 'is', null)
+
+  if (!topicError && Array.isArray(topicRows)) {
+    return new Map(
+      topicRows.map((row) => [row.topic_key, row.alias_target_key as string | null] as const)
+    )
+  }
+
+  if (topicError && !isMissingRelationError(topicError)) {
+    console.error('Topic alias fetch error:', topicError)
+  }
+
   const { data } = await admin
     .from('analytics_events')
     .select('event_name, metadata, created_at')

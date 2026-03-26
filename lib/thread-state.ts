@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/server'
+import { isMissingRelationError } from '@/lib/supabase-fallback'
 
 interface AnalyticsStateRow {
   event_name: string
@@ -66,6 +67,36 @@ export async function fetchThreadUserStates({
   }
 
   const admin = createAdminClient()
+  const { data: tableRows, error: tableError } = await admin
+    .from('thread_user_states')
+    .select('user_id, match_id, muted, hidden, last_seen_at, last_reported_at, last_report_reason')
+    .in('user_id', uniqueUserIds)
+    .in('match_id', uniqueMatchIds)
+
+  if (!tableError && Array.isArray(tableRows)) {
+    const stateMap = new Map<string, ThreadUserState>()
+
+    for (const row of tableRows) {
+      if (!row.user_id || !row.match_id) {
+        continue
+      }
+
+      stateMap.set(buildThreadStateKey(row.user_id, row.match_id), {
+        hidden: Boolean(row.hidden),
+        muted: Boolean(row.muted),
+        lastSeenAt: row.last_seen_at ?? null,
+        lastReportedAt: row.last_reported_at ?? null,
+        lastReportReason: row.last_report_reason ?? null,
+      })
+    }
+
+    return stateMap
+  }
+
+  if (tableError && !isMissingRelationError(tableError)) {
+    console.error('Thread user state fetch error:', tableError)
+  }
+
   const estimatedLimit = Math.min(240, Math.max(24, uniqueUserIds.length * uniqueMatchIds.length * 8))
   const { data } = await admin
     .from('analytics_events')

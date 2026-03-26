@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { trackAnalyticsEvent } from '@/lib/analytics'
 import { isFounderEmail } from '@/lib/founders'
 import { getRequestUser } from '@/lib/request-user'
+import { createAdminClient } from '@/lib/supabase/server'
+import { isMissingRelationError } from '@/lib/supabase-fallback'
 
 function sanitizeDecision(value: unknown) {
   if (value === 'reviewed' || value === 'watch' || value === 'follow_up') {
@@ -69,6 +71,7 @@ export async function POST(request: Request) {
     }
 
     if (matchId && roomAction) {
+      const admin = createAdminClient()
       const eventName =
         roomAction === 'hide_room'
           ? 'moderation_room_hidden'
@@ -77,6 +80,26 @@ export async function POST(request: Request) {
             : roomAction === 'lock_joins'
               ? 'moderation_room_join_locked'
               : 'moderation_room_join_unlocked'
+
+      const timestamp = new Date().toISOString()
+      const { error: roomStateError } = await admin.from('room_moderation_states').upsert(
+        {
+          match_id: matchId,
+          hidden: roomAction === 'hide_room' ? true : roomAction === 'restore_room' ? false : undefined,
+          join_locked:
+            roomAction === 'lock_joins' ? true : roomAction === 'unlock_joins' ? false : undefined,
+          updated_by: user.id,
+          updated_at: timestamp,
+        },
+        {
+          onConflict: 'match_id',
+        }
+      )
+
+      if (roomStateError && !isMissingRelationError(roomStateError)) {
+        console.error('Moderation room state upsert error:', roomStateError)
+        return NextResponse.json({ error: 'Unable to update room moderation state' }, { status: 500 })
+      }
 
       await trackAnalyticsEvent({
         eventName,

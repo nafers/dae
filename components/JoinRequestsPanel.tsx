@@ -94,6 +94,12 @@ export default function JoinRequestsPanel({ matchId, initialRequests }: Props) {
           >
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium text-[var(--dae-ink)]">{request.daeText}</p>
+              {request.fitScore !== null || request.fitReason ? (
+                <p className="mt-1 text-[11px] text-[var(--dae-muted)]">
+                  {request.fitScore !== null ? `${Math.round(request.fitScore * 100)}% fit` : 'Fit pending'}
+                  {request.fitReason ? ` | ${request.fitReason}` : ''}
+                </p>
+              ) : null}
               <p className="mt-1 text-[11px] text-[var(--dae-muted)]">
                 Requested {new Date(request.createdAt).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
               </p>

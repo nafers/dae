@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
-import { fetchBlockedUserIdsForUser } from '@/lib/blocks'
 import { generateHandle } from '@/lib/handles'
 import { trackAnalyticsEvents } from '@/lib/analytics'
 import { fetchRoomModerationStates, getRoomModerationState } from '@/lib/moderation-state'
+import { userHasBlockedParticipantInMatch } from '@/lib/thread-access'
 import { fetchPendingJoinRequestsForMatch } from '@/lib/thread-join-requests'
 import { getRequestUser } from '@/lib/request-user'
 import { createAdminClient } from '@/lib/supabase/server'
+import { isMissingRelationError } from '@/lib/supabase-fallback'
 
 async function ensureParticipant(matchId: string, userId: string) {
   const admin = createAdminClient()
@@ -83,8 +84,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'New joins are paused for this room' }, { status: 400 })
       }
 
-      const blockedUserIds = await fetchBlockedUserIdsForUser(user.id)
-      const [{ data: dae }, { data: existingParticipant }] = await Promise.all([
+      const [{ data: dae }, { data: existingParticipant }, hasActiveBlock] = await Promise.all([
         admin
           .from('daes')
           .select('id, text, status')
@@ -97,6 +97,10 @@ export async function POST(request: Request) {
           .eq('match_id', matchId)
           .eq('user_id', user.id)
           .maybeSingle(),
+        userHasBlockedParticipantInMatch({
+          currentUserId: user.id,
+          matchId,
+        }),
       ])
 
       if (!dae) {
@@ -111,13 +115,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'You are already in this room' }, { status: 400 })
       }
 
-      const { data: roomParticipants } = await admin
-        .from('thread_participants')
-        .select('user_id')
-        .eq('match_id', matchId)
-
-      if ((roomParticipants ?? []).some((participant) => blockedUserIds.has(participant.user_id))) {
-        return NextResponse.json({ error: 'You blocked someone in this room' }, { status: 400 })
+      if (hasActiveBlock) {
+        return NextResponse.json({ error: 'A block is active in this room' }, { status: 400 })
       }
 
       const pendingRequests = await fetchPendingJoinRequestsForMatch(matchId)
@@ -134,6 +133,24 @@ export async function POST(request: Request) {
       }
 
       const requestId = crypto.randomUUID()
+      const { error: requestInsertError } = await admin.from('thread_join_requests').insert({
+        id: requestId,
+        match_id: matchId,
+        requester_id: user.id,
+        dae_id: daeId,
+        dae_text: dae.text,
+        source: typeof sourceContext?.source === 'string' ? sourceContext.source : 'manual_review',
+        fit_score:
+          typeof sourceContext?.fitScore === 'number' ? Number(sourceContext.fitScore.toFixed(3)) : null,
+        fit_reason: typeof sourceContext?.fitReason === 'string' ? sourceContext.fitReason : null,
+        topic: typeof sourceContext?.topic === 'string' ? sourceContext.topic : null,
+        state: 'requested',
+      })
+
+      if (requestInsertError && !isMissingRelationError(requestInsertError)) {
+        console.error('Thread join request insert error:', requestInsertError)
+        return NextResponse.json({ error: 'Unable to create this join request' }, { status: 500 })
+      }
 
       await trackAnalyticsEvents([
         {
@@ -176,6 +193,20 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'You cannot cancel this request' }, { status: 403 })
       }
 
+      const { error: cancelError } = await admin
+        .from('thread_join_requests')
+        .update({
+          state: 'cancelled',
+          responder_id: user.id,
+          resolved_at: new Date().toISOString(),
+        })
+        .eq('id', requestId)
+
+      if (cancelError && !isMissingRelationError(cancelError)) {
+        console.error('Thread join request cancel error:', cancelError)
+        return NextResponse.json({ error: 'Unable to cancel this request' }, { status: 500 })
+      }
+
       await trackAnalyticsEvents([
         {
           eventName: 'thread_join_request_cancelled',
@@ -199,6 +230,20 @@ export async function POST(request: Request) {
     }
 
     if (action === 'decline') {
+      const { error: declineError } = await admin
+        .from('thread_join_requests')
+        .update({
+          state: 'declined',
+          responder_id: user.id,
+          resolved_at: new Date().toISOString(),
+        })
+        .eq('id', requestId)
+
+      if (declineError && !isMissingRelationError(declineError)) {
+        console.error('Thread join request decline error:', declineError)
+        return NextResponse.json({ error: 'Unable to decline this request' }, { status: 500 })
+      }
+
       await trackAnalyticsEvents([
         {
           eventName: 'thread_join_request_declined',
@@ -224,8 +269,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'This room is not accepting new people right now' }, { status: 400 })
     }
 
-    const approverBlockedUserIds = await fetchBlockedUserIdsForUser(user.id)
-    const [{ data: existingParticipant }, { data: requesterDae }, { data: threadParticipants }, { data: priorHandleRows }] =
+    const [
+      { data: existingParticipant },
+      { data: requesterDae },
+      { data: threadParticipants },
+      { data: priorHandleRows },
+      requesterHasActiveBlock,
+    ] =
       await Promise.all([
         admin
           .from('thread_participants')
@@ -247,11 +297,11 @@ export async function POST(request: Request) {
           .from('thread_participants')
           .select('handle')
           .eq('user_id', joinRequest.requesterId),
+        userHasBlockedParticipantInMatch({
+          currentUserId: joinRequest.requesterId,
+          matchId,
+        }),
       ])
-
-    if (approverBlockedUserIds.has(joinRequest.requesterId)) {
-      return NextResponse.json({ error: 'You blocked this user' }, { status: 400 })
-    }
 
     if (existingParticipant) {
       return NextResponse.json({ error: 'That user already joined this room' }, { status: 400 })
@@ -259,6 +309,10 @@ export async function POST(request: Request) {
 
     if (!requesterDae || requesterDae.status !== 'unmatched') {
       return NextResponse.json({ error: 'That DAE is no longer waiting' }, { status: 400 })
+    }
+
+    if (requesterHasActiveBlock) {
+      return NextResponse.json({ error: 'A block is active in this room' }, { status: 400 })
     }
 
     const excludedHandles = new Set<string>()
@@ -294,6 +348,20 @@ export async function POST(request: Request) {
     if (daeUpdateError) {
       console.error('Join request dae update error:', daeUpdateError)
       return NextResponse.json({ error: 'Unable to attach this DAE' }, { status: 500 })
+    }
+
+    const { error: approveError } = await admin
+      .from('thread_join_requests')
+      .update({
+        state: 'approved',
+        responder_id: user.id,
+        resolved_at: new Date().toISOString(),
+      })
+      .eq('id', requestId)
+
+    if (approveError && !isMissingRelationError(approveError)) {
+      console.error('Thread join request approve error:', approveError)
+      return NextResponse.json({ error: 'Attached the DAE, but could not finalize the request.' }, { status: 500 })
     }
 
     await trackAnalyticsEvents([

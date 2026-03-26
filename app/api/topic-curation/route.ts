@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { trackAnalyticsEvent } from '@/lib/analytics'
 import { isFounderEmail } from '@/lib/founders'
 import { getRequestUser } from '@/lib/request-user'
+import { createAdminClient } from '@/lib/supabase/server'
+import { isMissingRelationError } from '@/lib/supabase-fallback'
 
 function sanitizeAction(value: unknown) {
   if (
@@ -54,6 +56,31 @@ export async function POST(request: Request) {
 
     if (action === 'set_alias' && (!targetTopicKey || targetTopicKey === topicKey)) {
       return NextResponse.json({ error: 'Choose a different target topic' }, { status: 400 })
+    }
+
+    const admin = createAdminClient()
+    const { error: upsertError } = await admin.from('topic_registry_state').upsert(
+      {
+        topic_key: topicKey,
+        hidden: action === 'hide' ? true : action === 'unhide' ? false : undefined,
+        pinned: action === 'pin' ? true : action === 'unpin' ? false : undefined,
+        alias_target_key:
+          action === 'set_alias'
+            ? targetTopicKey
+            : action === 'clear_alias'
+              ? null
+              : undefined,
+        updated_by: user.id,
+        updated_at: new Date().toISOString(),
+      },
+      {
+        onConflict: 'topic_key',
+      }
+    )
+
+    if (upsertError && !isMissingRelationError(upsertError)) {
+      console.error('Topic curation upsert error:', upsertError)
+      return NextResponse.json({ error: 'Unable to update topic state' }, { status: 500 })
     }
 
     await trackAnalyticsEvent({

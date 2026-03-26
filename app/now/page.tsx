@@ -62,6 +62,39 @@ export default async function NowPage() {
   const waitingRows = (waitingDaes ?? []) as WaitingDaeRow[]
   const attentionItems = items.slice(0, 5)
   const topicItems = (topicRegistry.followed.length > 0 ? topicRegistry.followed : topicRegistry.rising).slice(0, 4)
+  const primaryNextStep =
+    attentionItems[0]
+      ? {
+          eyebrow: 'Best next step',
+          title: attentionItems[0].title,
+          detail: attentionItems[0].detail,
+          href: attentionItems[0].href,
+          label:
+            attentionItems[0].kind === 'reply'
+              ? 'Open unread'
+              : attentionItems[0].kind === 'request'
+                ? 'Handle request'
+                : attentionItems[0].kind === 'follow'
+                  ? 'Open topic'
+                  : 'Open now',
+        }
+      : waitingRows[0]
+        ? {
+            eyebrow: 'Best next step',
+            title: waitingRows[0].text,
+            detail: 'This DAE is still waiting. Review rescue options or keep it in the pool.',
+            href: `/review?daeId=${encodeURIComponent(waitingRows[0].id)}`,
+            label: 'Review fit',
+          }
+        : topicItems[0]
+          ? {
+              eyebrow: 'Best next step',
+              title: topicItems[0].headline,
+              detail: topicItems[0].summary,
+              href: `/topics/${encodeURIComponent(topicItems[0].topicKey)}`,
+              label: 'Open topic',
+            }
+          : null
 
   return (
     <AppShell
@@ -72,6 +105,26 @@ export default async function NowPage() {
       description={`${summary.unreadCount} replies, ${summary.waitingCount} waiting prompts, ${summary.freshMatchCount} fresh room${summary.freshMatchCount === 1 ? '' : 's'}.`}
     >
       <div className="space-y-5">
+        {primaryNextStep ? (
+          <section className="rounded-[28px] border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)]/50 p-5 shadow-[0_14px_36px_rgba(32,26,22,0.05)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--dae-accent-cool)]">
+              {primaryNextStep.eyebrow}
+            </p>
+            <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <p className="text-xl font-semibold text-[var(--dae-ink)]">{primaryNextStep.title}</p>
+                <p className="mt-2 text-sm leading-6 text-[var(--dae-muted)]">{primaryNextStep.detail}</p>
+              </div>
+              <Link
+                href={primaryNextStep.href}
+                className="rounded-full border border-[var(--dae-accent-cool)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-accent-cool)] hover:opacity-95"
+              >
+                {primaryNextStep.label}
+              </Link>
+            </div>
+          </section>
+        ) : null}
+
         <section className="grid gap-3 md:grid-cols-4">
           {[
             { label: 'Replies', value: summary.unreadCount, tone: 'cool' },
