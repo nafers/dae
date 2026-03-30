@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useDeferredValue, useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useState } from 'react'
 import type { TopicRegistryItem } from '@/lib/topic-registry'
 import FollowTopicButton from './FollowTopicButton'
 import ShareButton from './ShareButton'
@@ -12,6 +12,7 @@ type TopicSort = 'activity' | 'people' | 'ideas'
 interface Props {
   topics: TopicRegistryItem[]
   waitingCount: number
+  initialQuery?: string
 }
 
 const filters: Array<{ key: TopicFilter; label: string }> = [
@@ -37,12 +38,16 @@ function formatTimestamp(timestamp: string) {
   })
 }
 
-export default function TopicCatalog({ topics, waitingCount }: Props) {
-  const [query, setQuery] = useState('')
+export default function TopicCatalog({ topics, waitingCount, initialQuery = '' }: Props) {
+  const [query, setQuery] = useState(initialQuery)
   const [filter, setFilter] = useState<TopicFilter>('all')
   const [sort, setSort] = useState<TopicSort>('activity')
   const deferredQuery = useDeferredValue(query)
   const normalizedQuery = deferredQuery.trim().toLowerCase()
+
+  useEffect(() => {
+    setQuery(initialQuery)
+  }, [initialQuery])
 
   const visibleTopics = useMemo(() => {
     return [...topics]
@@ -178,7 +183,7 @@ export default function TopicCatalog({ topics, waitingCount }: Props) {
                 )
               })}
               <Link
-                href={waitingCount > 0 ? '/review' : '/submit'}
+                href={waitingCount > 0 ? '/place' : '/submit'}
                 className="rounded-full border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] px-3 py-1.5 text-sm font-medium text-[var(--dae-accent-warm)] hover:opacity-95"
               >
                 {waitingCount > 0 ? `Place ${waitingCount}` : 'Submit'}
@@ -304,7 +309,7 @@ export default function TopicCatalog({ topics, waitingCount }: Props) {
                 </Link>
                 {waitingCount > 0 ? (
                   <Link
-                    href={`/review?topic=${encodeURIComponent(topic.headline)}`}
+                    href={`/place?topic=${encodeURIComponent(topic.headline)}`}
                     className="rounded-full border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-warm)] hover:opacity-95"
                   >
                     Place waiting DAE

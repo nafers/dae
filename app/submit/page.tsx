@@ -43,7 +43,7 @@ export default async function SubmitPage({ searchParams }: Props) {
 
           <div className="flex flex-wrap gap-2">
             <Link
-              href="/review"
+              href="/place"
               className="rounded-full border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-warm)] hover:opacity-95"
             >
               Place
@@ -55,14 +55,8 @@ export default async function SubmitPage({ searchParams }: Props) {
               Chats
             </Link>
             <Link
-              href="/browse"
-              className="rounded-full border border-[var(--dae-accent-rose)] bg-[var(--dae-accent-rose-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-rose)] hover:opacity-95"
-            >
-              Browse
-            </Link>
-            <Link
               href="/topics"
-              className="rounded-full border border-[var(--dae-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-ink)] hover:border-[var(--dae-muted)]"
+              className="rounded-full border border-[var(--dae-accent-rose)] bg-[var(--dae-accent-rose-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-rose)] hover:opacity-95"
             >
               Topics
             </Link>

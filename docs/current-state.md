@@ -41,9 +41,8 @@ The main signed-in shell currently centers around:
 
 - `Now`
 - `Submit`
-- `Place` (route is still `/review`)
+- `Place` (canonical route is now `/place`; `/review` remains as a compatibility path)
 - `Chats`
-- `Browse`
 - `Topics`
 - `Activity`
 - `Settings`
@@ -88,8 +87,9 @@ Founder-only surfaces:
   - near topics
 - The main UI surface is:
   - [components/SubmitForm.tsx](D:/Codex%20DAE/dae/components/SubmitForm.tsx)
-  - [app/review/page.tsx](D:/Codex%20DAE/dae/app/review/page.tsx)
-- User-facing language is now `Place`, though the route remains `/review`
+  - [app/place/page.tsx](D:/Codex%20DAE/dae/app/place/page.tsx)
+- `/place` is now the canonical user-facing route
+- `/review` still exists as a legacy compatibility path
 
 ### Join policy
 
@@ -113,19 +113,22 @@ After posting a DAE, users can now:
 
 ## Topics, Browse, and Discovery
 
-### Browse
+### Discovery surface
 
-Browse is intentionally not a chat preview surface anymore.
+Topics are now the main discovery surface.
 
-Current Browse principles:
+Current discovery principles:
 - searchable by keywords
 - shows topic summaries and example DAEs
 - does not expose room messages
 - actual chat content stays private to room members
 
 Main files:
-- [app/browse/page.tsx](D:/Codex%20DAE/dae/app/browse/page.tsx)
-- [components/BrowseTopics.tsx](D:/Codex%20DAE/dae/components/BrowseTopics.tsx)
+- [app/topics/page.tsx](D:/Codex%20DAE/dae/app/topics/page.tsx)
+- [components/TopicCatalog.tsx](D:/Codex%20DAE/dae/components/TopicCatalog.tsx)
+
+Compatibility note:
+- `/browse` now forwards into `/topics`
 
 ### Topic hubs
 
@@ -277,7 +280,7 @@ The important thing is to keep deepening the same spine:
 
 These are the main things to keep in mind for future work:
 
-- Route naming is still mixed: the UX says `Place` but the route is `/review`
+- `Place` is now canonical, but `/review` still exists as a legacy path
 - Rescue fit score is composite; user-facing “percent” language can be misleading
 - Realtime chat is good but should still be treated as something to watch
 - Topic intelligence is stronger now, but still partly generated/computed rather than fully persisted
@@ -298,4 +301,3 @@ If continuing from here, likely high-value next moves are:
 Use something like:
 
 “Read [docs/current-state.md](D:/Codex%20DAE/dae/docs/current-state.md) and [docs/current-roadmap.md](D:/Codex%20DAE/dae/docs/current-roadmap.md) first, then continue from the current implemented state instead of re-solving old problems.”
-

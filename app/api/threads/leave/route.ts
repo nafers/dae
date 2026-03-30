@@ -112,7 +112,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       ok: true,
-      redirectTo: mode === 'detach' ? '/review' : '/threads',
+      redirectTo: mode === 'detach' ? '/place' : '/threads',
     })
   } catch (error) {
     console.error('Unexpected thread leave route error:', error)

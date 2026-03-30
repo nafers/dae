@@ -199,10 +199,10 @@ export default async function ReviewPage({ searchParams }: Props) {
               Submit
             </Link>
             <Link
-              href="/browse"
+              href="/topics"
               className="rounded-full border border-[var(--dae-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-ink)] hover:border-[var(--dae-muted)]"
             >
-              Browse
+              Topics
             </Link>
           </div>
         </div>
@@ -227,6 +227,33 @@ export default async function ReviewPage({ searchParams }: Props) {
             </div>
           </section>
 
+          <section className="grid gap-3 lg:grid-cols-3">
+            <div className="rounded-[24px] border border-[var(--dae-accent)] bg-[var(--dae-accent-soft)]/55 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent)]">
+                Auto-admit
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[var(--dae-ink)]">
+                Strong fits can join a room immediately.
+              </p>
+            </div>
+            <div className="rounded-[24px] border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)]/65 p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--dae-accent-warm)]">
+                Room approval
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[var(--dae-ink)]">
+                Weaker rescue fits need someone in the room to admit them.
+              </p>
+            </div>
+            <div className="rounded-[24px] border border-[var(--dae-line)] bg-[var(--dae-surface)] p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[var(--dae-muted)]">
+                Joins paused
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[var(--dae-ink)]">
+                Founder-locked rooms stay visible here, but they will not take new people until reopened.
+              </p>
+            </div>
+          </section>
+
           {invitedThread ? (
             <section className="rounded-[28px] border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)]/60 p-4 shadow-[0_14px_36px_rgba(32,26,22,0.05)]">
               <div className="flex flex-wrap items-center justify-between gap-3">
@@ -239,7 +266,7 @@ export default async function ReviewPage({ searchParams }: Props) {
                   </p>
                 </div>
                 <Link
-                  href="/review"
+                  href="/place"
                   className="rounded-full border border-[var(--dae-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
                 >
                   Clear
@@ -282,7 +309,7 @@ export default async function ReviewPage({ searchParams }: Props) {
                   </p>
                 </div>
                 <Link
-                  href="/review"
+                  href="/place"
                   className="rounded-full border border-[var(--dae-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
                 >
                   Clear
@@ -303,7 +330,7 @@ export default async function ReviewPage({ searchParams }: Props) {
                   </p>
                 </div>
                 <Link
-                  href="/review"
+                  href="/place"
                   className="rounded-full border border-[var(--dae-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
                 >
                   Clear

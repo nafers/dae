@@ -62,6 +62,13 @@ export default async function NowPage() {
   const waitingRows = (waitingDaes ?? []) as WaitingDaeRow[]
   const attentionItems = items.slice(0, 5)
   const topicItems = (topicRegistry.followed.length > 0 ? topicRegistry.followed : topicRegistry.rising).slice(0, 4)
+  const prioritizedThreads = [...joinedThreads].sort((a, b) => {
+    if (a.hasUnread !== b.hasUnread) {
+      return a.hasUnread ? -1 : 1
+    }
+
+    return new Date(b.latestActivityAt).getTime() - new Date(a.latestActivityAt).getTime()
+  })
   const primaryNextStep =
     attentionItems[0]
       ? {
@@ -83,7 +90,7 @@ export default async function NowPage() {
             eyebrow: 'Best next step',
             title: waitingRows[0].text,
             detail: 'This DAE is still waiting. Review rescue options or keep it in the pool.',
-            href: `/review?daeId=${encodeURIComponent(waitingRows[0].id)}`,
+            href: `/place?daeId=${encodeURIComponent(waitingRows[0].id)}`,
             label: 'Place it',
           }
         : topicItems[0]
@@ -222,17 +229,17 @@ export default async function NowPage() {
                     No rooms yet.
                   </div>
                 ) : (
-                  joinedThreads.map((thread) => (
+                  prioritizedThreads.map((thread) => (
                     <ThreadOverviewCard
                       key={thread.matchId}
                       thread={thread}
                       compact
                       primaryAction={
                         <Link
-                          href={`/threads/${thread.matchId}`}
+                          href={thread.hasUnread ? `/threads/${thread.matchId}?jump=unread` : `/threads/${thread.matchId}`}
                           className="rounded-full border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-cool)] hover:opacity-95"
                         >
-                          Open
+                          {thread.hasUnread ? 'Open unread' : 'Open'}
                         </Link>
                       }
                     />
@@ -255,7 +262,7 @@ export default async function NowPage() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Link
-                    href="/review"
+                    href="/place"
                     className="rounded-full border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] px-3 py-1.5 text-xs font-medium text-[var(--dae-accent-warm)] hover:opacity-95"
                   >
                     Place
@@ -278,7 +285,7 @@ export default async function NowPage() {
                   waitingRows.map((dae) => (
                     <Link
                       key={dae.id}
-                      href={`/review?daeId=${encodeURIComponent(dae.id)}`}
+                      href={`/place?daeId=${encodeURIComponent(dae.id)}`}
                       className="block rounded-2xl bg-[var(--dae-surface)] px-4 py-3 transition-colors hover:bg-white"
                     >
                       <p className="text-sm font-medium text-[var(--dae-ink)]">{dae.text}</p>

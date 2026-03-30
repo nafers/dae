@@ -401,7 +401,7 @@ export default function ThreadExitControls({
               Vote to remove
             </p>
             <p className="mt-1 text-xs text-[var(--dae-muted)]">
-              Only for rooms with 3+ people. Enough votes removes that person, clears their messages here, and reopens their DAE elsewhere.
+              Only for rooms with 3+ people. Enough votes removes that person, clears their messages here, and reopens their DAE in Place.
             </p>
           </div>
 

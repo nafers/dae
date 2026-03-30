@@ -44,7 +44,7 @@ export function buildTopicActivityFeed({
       kind: 'waiting' as const,
       title: prompt.text,
       detail: 'Still waiting for the right room or match.',
-      href: '/review',
+      href: '/place',
       timestamp: prompt.created_at,
     })),
   ].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())

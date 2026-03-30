@@ -176,7 +176,7 @@ export default async function TopicHubPage({ params }: Props) {
               </Link>
               {user ? (
                 <Link
-                  href={waitingCount > 0 ? `/review?topic=${encodeURIComponent(topic.headline)}` : '/submit'}
+                  href={waitingCount > 0 ? `/place?topic=${encodeURIComponent(topic.headline)}` : '/submit'}
                   className="rounded-full border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-warm)] hover:opacity-95"
                 >
                   {waitingCount > 0 ? 'Attach a waiting DAE' : 'Submit yours'}
@@ -377,7 +377,7 @@ export default async function TopicHubPage({ params }: Props) {
                 <div className="mt-3 flex flex-wrap gap-2">
                   {user ? (
                     <Link
-                      href={waitingCount > 0 ? `/review?topic=${encodeURIComponent(topic.headline)}` : `/submit?draft=${encodeURIComponent(topic.searchQuery)}`}
+                      href={waitingCount > 0 ? `/place?topic=${encodeURIComponent(topic.headline)}` : `/submit?draft=${encodeURIComponent(topic.searchQuery)}`}
                       className="rounded-full border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-warm)] hover:opacity-95"
                     >
                       {waitingCount > 0 ? 'See fit in Place' : 'Add your DAE'}

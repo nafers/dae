@@ -132,9 +132,9 @@ export default function SubmitForm({ initialText = '', initialInviteMatchId = ''
         return
       }
 
-      router.push(
-        `/review?daeId=${encodeURIComponent(waitingResult.daeId)}&matchId=${encodeURIComponent(room.matchId)}`
-      )
+        router.push(
+          `/place?daeId=${encodeURIComponent(waitingResult.daeId)}&matchId=${encodeURIComponent(room.matchId)}`
+        )
     } catch (joinError) {
       setError(joinError instanceof Error ? joinError.message : 'Unable to continue into this room.')
       setPendingRoomIds((current) => current.filter((matchId) => matchId !== room.matchId))
@@ -259,10 +259,10 @@ export default function SubmitForm({ initialText = '', initialInviteMatchId = ''
               <Link
                 href={
                   waitingResult?.daeId && bestRoom
-                    ? `/review?daeId=${encodeURIComponent(waitingResult.daeId)}&matchId=${encodeURIComponent(bestRoom.matchId)}`
+                    ? `/place?daeId=${encodeURIComponent(waitingResult.daeId)}&matchId=${encodeURIComponent(bestRoom.matchId)}`
                     : waitingResult?.daeId && bestTopic
-                      ? `/review?daeId=${encodeURIComponent(waitingResult.daeId)}&topic=${encodeURIComponent(bestTopic.label)}`
-                      : '/review'
+                      ? `/place?daeId=${encodeURIComponent(waitingResult.daeId)}&topic=${encodeURIComponent(bestTopic.label)}`
+                      : '/place'
                 }
                 className="rounded-full border border-[var(--dae-accent-warm)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-accent-warm)] hover:bg-[var(--dae-accent-warm-soft)]"
               >
@@ -286,8 +286,8 @@ export default function SubmitForm({ initialText = '', initialInviteMatchId = ''
               <Link
                 href={
                   waitingResult.daeId && initialInviteMatchId
-                    ? `/review?daeId=${encodeURIComponent(waitingResult.daeId)}&matchId=${encodeURIComponent(initialInviteMatchId)}`
-                    : '/review'
+                    ? `/place?daeId=${encodeURIComponent(waitingResult.daeId)}&matchId=${encodeURIComponent(initialInviteMatchId)}`
+                    : '/place'
                 }
                 className="rounded-full border border-[var(--dae-accent-warm)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-accent-warm)] hover:bg-[var(--dae-accent-warm-soft)]"
               >
@@ -346,7 +346,7 @@ export default function SubmitForm({ initialText = '', initialInviteMatchId = ''
                             : 'Request to join'}
                       </button>
                       <Link
-                        href={`/review?daeId=${encodeURIComponent(waitingResult.daeId)}&matchId=${encodeURIComponent(room.matchId)}`}
+                        href={`/place?daeId=${encodeURIComponent(waitingResult.daeId)}&matchId=${encodeURIComponent(room.matchId)}`}
                         className="rounded-full border border-[var(--dae-line)] bg-white px-3 py-1.5 text-xs font-medium text-[var(--dae-muted)] hover:border-[var(--dae-muted)] hover:text-[var(--dae-ink)]"
                       >
                         Place options
@@ -396,20 +396,14 @@ export default function SubmitForm({ initialText = '', initialInviteMatchId = ''
             New
           </button>
           <Link
-            href="/review"
+            href="/place"
             className="rounded-full border border-[var(--dae-accent-warm)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-accent-warm)] hover:bg-[var(--dae-accent-warm-soft)]"
           >
             Place
           </Link>
           <Link
-            href="/browse"
-            className="rounded-full border border-[var(--dae-accent-rose)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-accent-rose)] hover:bg-[var(--dae-accent-rose-soft)]"
-          >
-            Browse
-          </Link>
-          <Link
             href="/topics"
-            className="rounded-full border border-[var(--dae-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-ink)] hover:border-[var(--dae-muted)]"
+            className="rounded-full border border-[var(--dae-accent-rose)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-accent-rose)] hover:bg-[var(--dae-accent-rose-soft)]"
           >
             Topics
           </Link>

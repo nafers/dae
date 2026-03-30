@@ -67,10 +67,10 @@ export default async function ThreadsPage({ searchParams }: Props) {
               Submit
             </Link>
             <Link
-              href="/browse"
+              href="/topics"
               className="rounded-full border border-[var(--dae-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-ink)] hover:border-[var(--dae-muted)]"
             >
-              Browse
+              Topics
             </Link>
           </div>
         </div>
@@ -107,10 +107,10 @@ export default async function ThreadsPage({ searchParams }: Props) {
                 compact
                 primaryAction={
                   <Link
-                    href={`/threads/${thread.matchId}`}
+                    href={thread.hasUnread ? `/threads/${thread.matchId}?jump=unread` : `/threads/${thread.matchId}`}
                     className="rounded-full border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-cool)] hover:opacity-95"
                   >
-                    Open
+                    {thread.hasUnread ? 'Open unread' : 'Open'}
                   </Link>
                 }
                 secondaryAction={

@@ -47,6 +47,7 @@ export default function JoinThreadControl({
   const fitScore = typeof sourceContext?.fitScore === 'number' ? sourceContext.fitScore : null
   const canAutoJoin = canAutoJoinThreadWithFitScore(fitScore)
   const fitPercent = fitScore === null ? null : Math.round(fitScore * 100)
+  const policyLabel = joinLocked ? 'Paused' : canAutoJoin ? 'Auto-admit' : 'Needs room approval'
 
   useEffect(() => {
     setSelectedDaeId(defaultDaeId ?? availableDaes[0]?.id ?? '')
@@ -132,6 +133,17 @@ export default function JoinThreadControl({
       ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
+        <span
+          className={`rounded-full px-3 py-1 text-[11px] font-medium ${
+            joinLocked
+              ? 'bg-[var(--dae-surface)] text-[var(--dae-muted)]'
+              : canAutoJoin
+                ? 'bg-[var(--dae-accent-soft)] text-[var(--dae-accent)]'
+                : 'bg-[var(--dae-accent-warm-soft)] text-[var(--dae-accent-warm)]'
+          }`}
+        >
+          {policyLabel}
+        </span>
         <button
           type="button"
           onClick={() => void requestJoin()}

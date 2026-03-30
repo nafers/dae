@@ -30,10 +30,10 @@ export default async function ActivityPage() {
               Submit
             </Link>
             <Link
-              href="/browse"
+              href="/topics"
               className="rounded-full border border-[var(--dae-line)] bg-white px-4 py-2 text-sm font-medium text-[var(--dae-ink)] hover:border-[var(--dae-muted)]"
             >
-              Browse
+              Topics
             </Link>
           </div>
         </div>

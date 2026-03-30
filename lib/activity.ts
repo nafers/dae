@@ -148,7 +148,7 @@ export async function fetchActivityFeed(currentUserId: string) {
         kind: 'request' as const,
         title: request.daeText,
         detail: stateLabel,
-        href: request.state === 'approved' ? `/threads/${request.matchId}?jump=latest` : '/review',
+        href: request.state === 'approved' ? `/threads/${request.matchId}?jump=latest` : '/place',
         timestamp: request.resolvedAt ?? request.createdAt,
         tone: request.state === 'approved' ? ('cool' as const) : ('warm' as const),
       }
@@ -183,7 +183,7 @@ export async function fetchActivityFeed(currentUserId: string) {
       kind: 'waiting' as const,
       title: dae.text,
       detail: 'Still waiting. Place it into the best room or leave it in the pool.',
-      href: '/review',
+      href: '/place',
       timestamp: dae.created_at,
       tone: 'warm' as const,
     })),

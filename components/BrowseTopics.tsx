@@ -212,7 +212,7 @@ export default function BrowseTopics({
 
               {waitingCount > 0 ? (
                 <Link
-                  href="/review"
+                  href="/place"
                   className="rounded-full border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] px-3 py-1.5 text-sm font-medium text-[var(--dae-accent-warm)] hover:opacity-95"
                 >
                   Place {waitingCount}
@@ -320,7 +320,7 @@ export default function BrowseTopics({
                 </Link>
                 {waitingCount > 0 ? (
                   <Link
-                    href={`/review?topic=${encodeURIComponent(topic.headline)}`}
+                    href={`/place?topic=${encodeURIComponent(topic.headline)}`}
                     className="rounded-full border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-warm)] hover:opacity-95"
                   >
                     Attach a waiting DAE

@@ -203,7 +203,7 @@ export default function ChatThread({
       })
 
       if (response.status === 403 || response.status === 404) {
-        router.replace('/review')
+        router.replace('/place')
         return
       }
 
@@ -230,7 +230,7 @@ export default function ChatThread({
       })
 
       if (response.status === 403 || response.status === 404) {
-        router.replace('/review')
+        router.replace('/place')
         return
       }
 

@@ -5,7 +5,15 @@ import { getRequestUser } from '@/lib/request-user'
 import { createAdminClient } from '@/lib/supabase/server'
 import { fetchTopicRegistry } from '@/lib/topic-registry'
 
-export default async function TopicsPage() {
+interface Props {
+  searchParams: Promise<{
+    q?: string | string[]
+  }>
+}
+
+export default async function TopicsPage({ searchParams }: Props) {
+  const { q } = await searchParams
+  const initialQuery = Array.isArray(q) ? q[0] ?? '' : q ?? ''
   const user = await getRequestUser()
 
   if (!user) {
@@ -30,7 +38,7 @@ export default async function TopicsPage() {
       title="Topic hubs"
       description="The stable idea layer in DAE. Follow what keeps coming up, search it, and move into the right room from there."
     >
-      <TopicCatalog topics={registry.items} waitingCount={waitingCount ?? 0} />
+      <TopicCatalog topics={registry.items} waitingCount={waitingCount ?? 0} initialQuery={initialQuery} />
     </AppShell>
   )
 }

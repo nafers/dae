@@ -177,7 +177,7 @@ function buildDigestHtml(items: CandidateItem[]) {
         )
         .join('')}
 
-      <a href="${appUrl}/browse?q=${encodeURIComponent(firstItem?.searchQuery ?? '')}" style="display: inline-block; background: #c85863; color: #ffffff; padding: 12px 18px; border-radius: 999px; text-decoration: none; font-weight: 700;">
+      <a href="${appUrl}/topics?q=${encodeURIComponent(firstItem?.searchQuery ?? '')}" style="display: inline-block; background: #c85863; color: #ffffff; padding: 12px 18px; border-radius: 999px; text-decoration: none; font-weight: 700;">
         Open DAE
       </a>
 

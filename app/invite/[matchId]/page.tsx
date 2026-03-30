@@ -45,7 +45,7 @@ export default async function InvitePage({ params }: Props) {
   })
 
   if (user) {
-    const roomTarget = `/review?invite=${matchId}&matchId=${matchId}`
+    const roomTarget = `/place?invite=${matchId}&matchId=${matchId}`
 
     if (moderationState.joinLocked) {
       redirect(`/topics/${encodeURIComponent(presentation.topicKey)}`)
@@ -158,7 +158,7 @@ export default async function InvitePage({ params }: Props) {
               href={
                 moderationState.joinLocked
                   ? `/?next=${encodeURIComponent(`/topics/${presentation.topicKey}`)}`
-                  : `/?next=${encodeURIComponent(`/review?invite=${matchId}`)}`
+                  : `/?next=${encodeURIComponent(`/place?invite=${matchId}`)}`
               }
               className="rounded-full border border-[var(--dae-accent)] bg-[var(--dae-accent-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent)] hover:opacity-95"
             >
