@@ -115,7 +115,7 @@ export default async function TopicHubPage({ params }: Props) {
 
   return (
     <AppShell
-      activeTab="browse"
+      activeTab="topics"
       userEmail={user?.email ?? ''}
       eyebrow="Topic"
       title={topic.headline}

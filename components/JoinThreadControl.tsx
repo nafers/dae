@@ -48,6 +48,23 @@ export default function JoinThreadControl({
   const canAutoJoin = canAutoJoinThreadWithFitScore(fitScore)
   const fitPercent = fitScore === null ? null : Math.round(fitScore * 100)
   const policyLabel = joinLocked ? 'Paused' : canAutoJoin ? 'Auto-admit' : 'Needs room approval'
+  const policyDetail = joinLocked
+    ? 'A founder paused new joins for this room.'
+    : canAutoJoin
+      ? `Strong fit (${fitPercent ?? 0}%). You can join right away.`
+      : requested
+        ? 'Waiting for someone in the room to approve.'
+        : fitScore !== null
+          ? `${fitPercent ?? 0}% fit. Someone in the room has to admit it.`
+          : 'Send your waiting DAE into Place for this room.'
+  const policySubdetail =
+    joinLocked
+      ? 'You can still keep following the topic and come back later.'
+      : canAutoJoin
+        ? 'You will enter immediately with a fresh anonymous handle for this room.'
+        : requested
+          ? 'Once approved, your DAE will attach to this room and you will land in the chat.'
+          : 'This keeps weaker rescue fits from dropping directly into a room unannounced.'
 
   useEffect(() => {
     setSelectedDaeId(defaultDaeId ?? availableDaes[0]?.id ?? '')
@@ -168,17 +185,10 @@ export default function JoinThreadControl({
                   ? 'Join now'
                   : 'Request to join'}
         </button>
-        <p className="text-xs text-[var(--dae-muted)]">
-          {joinLocked
-            ? 'A founder paused new joins for this room.'
-            : canAutoJoin
-              ? `Strong fit (${fitPercent ?? 0}%). You can join right away.`
-            : requested
-              ? 'Waiting for someone in the room to approve.'
-              : fitScore !== null
-                ? `${fitPercent ?? 0}% fit. Someone in the room has to admit it.`
-                : 'Send your waiting DAE into Place for this room.'}
-        </p>
+      </div>
+      <div className="space-y-1">
+        <p className="text-xs text-[var(--dae-muted)]">{policyDetail}</p>
+        <p className="text-[11px] text-[var(--dae-muted)]/80">{policySubdetail}</p>
       </div>
 
       {error ? <p className="text-xs text-red-500">{error}</p> : null}

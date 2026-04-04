@@ -49,12 +49,6 @@ export default async function SubmitPage({ searchParams }: Props) {
               Place
             </Link>
             <Link
-              href="/threads"
-              className="rounded-full border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-cool)] hover:opacity-95"
-            >
-              Chats
-            </Link>
-            <Link
               href="/topics"
               className="rounded-full border border-[var(--dae-accent-rose)] bg-[var(--dae-accent-rose-soft)] px-4 py-2 text-sm font-medium text-[var(--dae-accent-rose)] hover:opacity-95"
             >

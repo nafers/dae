@@ -32,7 +32,7 @@ export default async function TopicsPage({ searchParams }: Props) {
 
   return (
     <AppShell
-      activeTab="browse"
+      activeTab="topics"
       userEmail={user.email ?? ''}
       eyebrow="Topics"
       title="Topic hubs"

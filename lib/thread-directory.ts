@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/server'
 import { fetchActiveBlockPairs, hasActiveBlockBetween } from '@/lib/blocks'
+import { buildThreadRecap } from '@/lib/thread-recap'
 import { fetchThreadUserStates, getThreadUserState } from '@/lib/thread-state'
 
 interface DaeRelation {
@@ -46,6 +47,8 @@ export interface ThreadDirectoryItem {
   lastMessageSenderLabel: string
   unreadCount: number
   hasUnread: boolean
+  recapHeadline: string | null
+  recapDetail: string | null
   isHidden: boolean
   isMuted: boolean
   isJoined: boolean
@@ -220,6 +223,9 @@ export async function fetchThreadDirectory({
       ]
       const latestMessage = latestMessageByMatch.get(matchId)
       const threadMessages = messagesByMatch.get(matchId) ?? []
+      const orderedThreadMessages = [...threadMessages].sort(
+        (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      )
       const state = getThreadUserState(currentUserStateMap, currentUserId, matchId)
       const unreadCount = includeState
         ? threadMessages.filter(
@@ -233,6 +239,18 @@ export async function fetchThreadDirectory({
         ? orderedParticipants.find((participant) => participant.user_id === latestMessage.sender_id)
         : null
       const createdAt = createdAtByMatch.get(matchId) ?? latestMessage?.created_at ?? new Date().toISOString()
+      const recap =
+        includeState && includeMessages
+          ? buildThreadRecap({
+              participants: orderedParticipants.map((participant) => ({
+                userId: participant.user_id,
+                handle: participant.handle,
+              })),
+              messages: orderedThreadMessages,
+              lastSeenAt: state.lastSeenAt,
+              currentUserId,
+            })
+          : null
 
       return {
         matchId,
@@ -256,11 +274,13 @@ export async function fetchThreadDirectory({
           ? latestMessage.sender_id === currentUserId
             ? myParticipant
               ? `You (${myParticipant.handle})`
-              : 'You'
-            : messageSender?.handle ?? 'Someone'
-          : 'Thread',
+            : 'You'
+          : messageSender?.handle ?? 'Someone'
+        : 'Thread',
         unreadCount,
         hasUnread,
+        recapHeadline: recap?.headline ?? null,
+        recapDetail: recap?.detail ?? null,
         isHidden: state.hidden,
         isMuted: state.muted,
         isJoined,

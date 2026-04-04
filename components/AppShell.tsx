@@ -7,9 +7,9 @@ import { canUseTestSwitcher, getTestAccountEmails } from '@/lib/test-accounts'
 type AppTab =
   | 'now'
   | 'submit'
-  | 'review'
+  | 'place'
   | 'threads'
-  | 'browse'
+  | 'topics'
   | 'activity'
   | 'settings'
   | 'moderation'
@@ -28,9 +28,9 @@ interface Props {
 const tabs: Array<{ key: AppTab; href: string; label: string }> = [
   { key: 'now', href: '/now', label: 'Now' },
   { key: 'submit', href: '/submit', label: 'Submit' },
-  { key: 'review', href: '/place', label: 'Place' },
+  { key: 'place', href: '/place', label: 'Place' },
   { key: 'threads', href: '/threads', label: 'Chats' },
-  { key: 'browse', href: '/topics', label: 'Topics' },
+  { key: 'topics', href: '/topics', label: 'Topics' },
 ]
 
 const mobileTabs: Array<{ key: AppTab; href: string; label: string }> = [
@@ -49,7 +49,7 @@ const tabStyles: Record<AppTab, { active: string; accent: string }> = {
       'border border-[var(--dae-accent)] bg-[var(--dae-accent-soft)] text-[var(--dae-accent)] shadow-[0_10px_24px_rgba(20,108,103,0.12)]',
     accent: 'text-[var(--dae-accent)]',
   },
-  review: {
+  place: {
     active:
       'border border-[var(--dae-accent-warm)] bg-[var(--dae-accent-warm-soft)] text-[var(--dae-accent-warm)] shadow-[0_10px_24px_rgba(232,141,43,0.12)]',
     accent: 'text-[var(--dae-accent-warm)]',
@@ -59,7 +59,7 @@ const tabStyles: Record<AppTab, { active: string; accent: string }> = {
       'border border-[var(--dae-accent-cool)] bg-[var(--dae-accent-cool-soft)] text-[var(--dae-accent-cool)] shadow-[0_10px_24px_rgba(37,99,235,0.12)]',
     accent: 'text-[var(--dae-accent-cool)]',
   },
-  browse: {
+  topics: {
     active:
       'border border-[var(--dae-accent-rose)] bg-[var(--dae-accent-rose-soft)] text-[var(--dae-accent-rose)] shadow-[0_10px_24px_rgba(200,88,99,0.12)]',
     accent: 'text-[var(--dae-accent-rose)]',

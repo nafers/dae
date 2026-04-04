@@ -164,13 +164,33 @@ export default function SubmitForm({ initialText = '', initialInviteMatchId = ''
         router.push(`/threads/${data.matchId}`)
         return
       } else {
-        setStatus('waiting')
-        setPendingRoomIds([])
-        setWaitingResult({
+        const nextWaitingResult = {
           daeId: typeof data?.daeId === 'string' ? data.daeId : '',
           nearRooms: Array.isArray(data?.nearRooms) ? (data.nearRooms as NearRoomMatch[]) : [],
           nearTopics: Array.isArray(data?.nearTopics) ? (data.nearTopics as NearTopicMatch[]) : [],
-        })
+        }
+
+        setStatus('waiting')
+        setPendingRoomIds([])
+        setWaitingResult(nextWaitingResult)
+
+        if (nextWaitingResult.daeId) {
+          const nextRoom = nextWaitingResult.nearRooms[0]
+          const nextTopic = nextWaitingResult.nearTopics[0]
+          const params = new URLSearchParams({
+            daeId: nextWaitingResult.daeId,
+            from: 'submit',
+          })
+
+          if (nextRoom?.matchId) {
+            params.set('matchId', nextRoom.matchId)
+          } else if (nextTopic?.label) {
+            params.set('topic', nextTopic.label)
+          }
+
+          router.push(`/place?${params.toString()}`)
+          return
+        }
       }
     } catch {
       setError('Network error. Please try again.')

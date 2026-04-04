@@ -339,6 +339,15 @@ export default function ThreadExitControls({
         </button>
       </div>
 
+      <div className="grid gap-2 text-[11px] text-[var(--dae-muted)] md:grid-cols-2">
+        <div className="rounded-2xl border border-[var(--dae-line)] bg-white/70 px-3 py-2">
+          <span className="font-medium text-[var(--dae-ink)]">Leave</span> keeps this DAE matched but removes the room from your list.
+        </div>
+        <div className="rounded-2xl border border-[var(--dae-accent-rose)]/30 bg-[var(--dae-accent-rose-soft)]/50 px-3 py-2">
+          <span className="font-medium text-[var(--dae-ink)]">Detach</span> reopens the DAE in Place and deletes your messages from this room.
+        </div>
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         <select
           value={reportReason}

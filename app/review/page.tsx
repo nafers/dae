@@ -178,7 +178,7 @@ export default async function ReviewPage({ searchParams }: Props) {
 
   return (
     <AppShell
-      activeTab="review"
+      activeTab="place"
       userEmail={user.email ?? ''}
       eyebrow="Place"
       title="Place your waiting DAE"

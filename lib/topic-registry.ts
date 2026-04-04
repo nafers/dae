@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache'
 import { fetchCachedBrowseTopics, type BrowseTopicItem } from '@/lib/browse-directory'
 import { fetchTopicAliasMap, resolveTopicAlias } from '@/lib/topic-aliases'
 import { fetchTopicCurationStates, getTopicCurationState } from '@/lib/topic-curation'
@@ -17,6 +18,8 @@ export interface TopicRegistryItem extends BrowseTopicItem {
   roomHealthLabel: 'Working' | 'Mixed' | 'Risky'
   roomHealthDetail: string
 }
+
+type BaseTopicRegistryItem = Omit<TopicRegistryItem, 'isFollowed'>
 
 function scoreTopicRelation(source: BrowseTopicItem, candidate: BrowseTopicItem) {
   const keywordOverlap = source.keywords.filter((keyword) => candidate.keywords.includes(keyword)).length * 0.08
@@ -45,14 +48,14 @@ function scoreThreadRelation(topic: BrowseTopicItem, daeTexts: string[], roomSum
   )
 }
 
-export async function fetchTopicRegistry(currentUserId?: string | null) {
+const fetchBaseTopicRegistry = unstable_cache(
+  async (): Promise<BaseTopicRegistryItem[]> => {
   const topics = await fetchCachedBrowseTopics()
-  const [followedTopics, curationStates, aliasMap, recentThreads] = await Promise.all([
-    currentUserId ? fetchActiveTopicFollows(currentUserId) : Promise.resolve(new Map()),
+  const [curationStates, aliasMap, recentThreads] = await Promise.all([
     fetchTopicCurationStates(topics.map((topic) => topic.topicKey)),
     fetchTopicAliasMap(),
     fetchThreadDirectory({
-      currentUserId: currentUserId ?? '__topic-registry__',
+      currentUserId: '__topic-registry__',
       scope: 'all',
       limit: 48,
       includeState: false,
@@ -107,7 +110,6 @@ export async function fetchTopicRegistry(currentUserId?: string | null) {
 
     return {
       ...topic,
-      isFollowed: followedTopics.has(topic.topicKey),
       isPinned: curation.pinned,
       relatedTopicKeys,
       canonicalTopicKey,
@@ -116,9 +118,9 @@ export async function fetchTopicRegistry(currentUserId?: string | null) {
       roomHealthScore,
       roomHealthLabel,
       roomHealthDetail,
-    } satisfies TopicRegistryItem
+    } satisfies BaseTopicRegistryItem
   })
-  const visibleItems = items
+  return items
     .filter(
       (topic) =>
         topic.canonicalTopicKey === topic.topicKey &&
@@ -137,8 +139,23 @@ export async function fetchTopicRegistry(currentUserId?: string | null) {
         return b.trendScore - a.trendScore
       }
 
-      return new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime()
-    })
+        return new Date(b.latestAt).getTime() - new Date(a.latestAt).getTime()
+      })
+  },
+  ['topic-registry-base'],
+  { revalidate: 60 }
+)
+
+export async function fetchTopicRegistry(currentUserId?: string | null) {
+  const [baseItems, followedTopics] = await Promise.all([
+    fetchBaseTopicRegistry(),
+    currentUserId ? fetchActiveTopicFollows(currentUserId) : Promise.resolve(new Map()),
+  ])
+
+  const visibleItems = baseItems.map((topic) => ({
+    ...topic,
+    isFollowed: followedTopics.has(topic.topicKey),
+  })) satisfies TopicRegistryItem[]
 
   return {
     items: visibleItems,
